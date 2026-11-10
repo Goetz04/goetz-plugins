@@ -15,6 +15,17 @@ Lock in on big, important tasks. The `lockin` skill runs a gated workflow: under
 /plugin install lowkey@goetz
 ```
 
+## Updates
+
+Auto-update is off by default for third-party marketplaces. Turn it on in `/plugin` → Marketplaces → goetz → Enable auto-update. To update manually, run:
+
+```text
+/plugin marketplace update goetz
+/reload-plugins
+```
+
+Every release bumps the version in `plugin.json`. See the [changelog](plugins/lowkey/CHANGELOG.md) for what changed.
+
 ## Usage
 
 ```text
