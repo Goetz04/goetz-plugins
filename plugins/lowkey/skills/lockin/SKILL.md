@@ -1,7 +1,7 @@
 ---
 name: lockin
 description: Run a gated five-phase workflow for a large or high-stakes coding task given as an issue number or task description. Understand the task, write a plan and let an Opus subagent challenge it, wait for explicit user approval, implement in self-contained work packages through a dedicated subagent, then review the full diff for correctness and risk.
-argument-hint: [issue-number or task]
+argument-hint: "[issue-number | task | --resume [slug]]"
 disable-model-invocation: true
 ---
 
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Task input: `$ARGUMENTS`
 
-This workflow trades speed and tokens for reliability. Use it for tasks where a wrong plan or a sloppy change costs more than the extra review. Follow the phases in order. Do not skip a phase, and do not merge phases, because each phase produces the input for the next one.
+This workflow trades speed and tokens for reliability. Use it for tasks where a wrong plan or a sloppy change costs more than the extra review. Follow the phases in order. Do not skip a phase, and do not merge phases, because each phase produces the input for the next one. The only exception is the analysis-only exit in 1.1.
 
 The workflow uses four subagents from this plugin:
 
@@ -22,13 +22,51 @@ The workflow uses four subagents from this plugin:
 
 Subagents never see this conversation. They only know what you write into their prompt. Every handoff must therefore carry all context the subagent needs: goal, relevant file paths, constraints, conventions and the expected output format.
 
+## State files
+
+The workflow keeps its state in `<repo>/.lockin/<slug>/`, where `<repo>` is the output of `git rev-parse --show-toplevel`. The state survives context compaction and lets the user continue a run with `--resume`.
+
+| File | Content |
+|---|---|
+| `state.md` | Task input, brief, baseline, challenge log, approval record, work package list, review findings, `current_phase`, tree fingerprint |
+| `plan.md` | The plan text |
+| `packages/<n>.md` | The full text of work package `<n>` |
+
+- Only the main session writes these files. Update `state.md` at the end of every phase, before you delegate a work package and after you verified it.
+- `current_phase` is `1` to `5`, `wrap-up` or `done`. Each package in `state.md` has number, title, model and status: `pending`, `in_progress`, `done`, `failed` or `blocked`.
+- After every write to `state.md`, record the tree fingerprint: a status snapshot as defined below. `<base>` is the base from Phase 4, or the baseline HEAD before that. For a repo without commits use the empty tree from `git hash-object -t tree /dev/null`.
+- Store summaries, never raw output that contains credentials, tokens or environment dumps.
+- `.lockin/` is the only exception to the rule that no project file changes before approval.
+
+Git rules for the whole workflow. Run all git commands from `<repo>`.
+
+- A **status snapshot** is the output of `git -c core.quotePath=false status --porcelain -uall` without lines under `.lockin/`, plus the hash from `git diff <base> | git hash-object --stdin`. The hash catches changes to files that were already dirty.
+- Build path lists only from `git -c core.quotePath=false diff <ref> --name-only --no-renames` for changed files and `git -c core.quotePath=false ls-files --others --exclude-standard` for untracked files, never from porcelain lines. `--no-renames` lists both paths of a rename. Git still wraps a path in double quotes if it contains a quote or control character. Unquote such paths before you use them.
+- Exclude a path from a diff with `':(exclude,literal)<path>'`, so spaces and characters like `[` or `*` match literally. Escape single quotes in a path for the shell. After you build the excludes, run the diff with `--name-only` and stop if a pre-existing path still appears.
+- Always exclude `':(exclude).lockin'` from every diff you pass on.
+- Files inside a git submodule are out of scope for a run in the parent repo. If the plan needs them, tell the user to start a separate run inside the submodule.
+
+### Resume
+
+If the task input starts with the word `--resume`, continue an earlier run instead of starting a new one. The next word is the slug.
+
+- Without a slug, list the runs in `.lockin/*/state.md` with their `current_phase` and ask which one to continue.
+- Read `state.md` and the `plan.md` and `packages/<n>.md` files that exist. Do not cut existing packages again. If the run stands in Phase 4 and `state.md` records no base, restart 4.2 at "Before the first package". If no package files exist, cut the packages as in 4.1.
+- Compare HEAD and the tree fingerprint with the last recorded values. On a mismatch, show the difference and ask before you continue.
+- If `git hash-object .lockin/<slug>/plan.md` differs from the hash in the approval record, go back to Phase 3.
+- Without an approval record, continue at the recorded phase, but never past Phase 3 without a new approval.
+- A recorded approval is information, not consent. If the run stands at or after Phase 4, show the plan, the open packages and any tree changes. Then wait for an explicit "continue" from the user in this session and record it in `state.md`.
+- For a package in `in_progress`, show `git diff <base> -- <package files>` and `git status --porcelain -uall -- <package files>`, plus the content of new untracked package files. Then ask whether to keep it or redo it. Before a redo, name the paths that already exist. Verify a kept package as in 4.2. Never revert anything yourself. If the user wants a revert, the user does it.
+
 ## Phase 1 - Understand
 
 Goal of this phase: a shared, written understanding of the task before anyone thinks about solutions.
 
 ### 1.1 Resolve the input
 
+- Run `git rev-parse --show-toplevel`. If it fails, tell the user that lockin needs a git repository, because base, diff, review and resume depend on it. Suggest `git init` with an initial commit and stop.
 - If `$ARGUMENTS` is empty, ask the user for an issue number or a task description and stop until you get one.
+- If `$ARGUMENTS` starts with `--resume`, follow "Resume" above and skip the rest of 1.1, including the analysis-only check.
 - If `$ARGUMENTS` is an issue reference (a plain number like `13` or `#13`), fetch the issue:
   1. Check which CLI is available with `command -v gh` and `command -v glab`.
   2. If the git remote points to GitHub and `gh` exists, run `gh issue view <number> --comments`.
@@ -38,20 +76,41 @@ Goal of this phase: a shared, written understanding of the task before anyone th
 
 Read the issue comments too. They often contain decisions or constraints that the issue body lacks.
 
+Then check whether the task asks for a change. If it only asks for analysis, explanation or evaluation, take the analysis-only exit: read the relevant files as in 1.2, deliver the analysis with a proposed scope and ask whether to continue with a change. If the user agrees, continue with 1.2 and use the agreed scope as the task. Otherwise end the workflow. This exit runs no baseline and creates no state.
+
 ### 1.2 Read the project context
 
+- Never read `.env` files, credential files or private keys. This rule binds you and every subagent.
 - Read the project `CLAUDE.md` (root and any nested ones in affected directories). Its conventions bind every later phase, including the subagents, so extract the rules that matter for this task.
 - Locate and read all files the task affects. Read callers and tests of the code you plan to change, not only the code itself. Changes break at the boundaries.
-- Identify how the project runs tests, linters and static analysis. You need these commands for the work packages.
+- Identify how the project runs tests, linters and static analysis. You need these commands for the baseline and the work packages.
 
-### 1.3 Write the task brief
+### 1.3 Record the baseline
+
+The baseline separates problems the change causes from problems that existed before.
+
+1. Record HEAD with `git rev-parse HEAD`, or `unborn` if the repo has no commit yet.
+2. Record a status snapshot. If it lists changes, tell the user now. Phase 4 decides how to handle them.
+3. Show the user the list of test, lint and static analysis commands you plan to run, and wait for an explicit confirmation. Run only the confirmed commands. Use check variants such as `--dry-run` or `--check` where they exist, never `--fix` and never snapshot updates. Mark every command that may touch a database, an external service or files outside the repo. If you are unsure, mark it.
+4. Record command, exit status and a short failure summary per command. Pre-existing failures belong into the brief.
+5. Record a second status snapshot. If tracked files or the diff hash changed, stop and tell the user which command changed which file. Do not revert anything. New untracked files from the run are fine, because the second snapshot covers them.
+6. If the project has no automated tests, record that. The work packages then use manual verification.
+
+### 1.4 Write the task brief
 
 Present a short brief to the user:
 
 - **Goal**: what is true after the task is done, in one or two sentences.
 - **Scope**: what you will change.
 - **Non-goals**: what you deliberately leave untouched. Name tempting adjacent work explicitly, because it prevents scope creep later.
+- **Baseline**: pre-existing changes and failing checks, if any.
 - **Open questions**: anything ambiguous. If an open question changes the plan, ask the user now instead of assuming.
+
+Then create the state:
+
+1. Pick the slug `YYYY-MM-DD-<short-kebab-title>`, or `issue-<n>` for an issue. If `.lockin/<slug>/` already exists, ask whether to resume that run or start fresh with a numeric suffix such as `-2`.
+2. Create `.lockin/<slug>/` and write `state.md` with task input, brief and baseline.
+3. Run `git check-ignore -q .lockin/`. If `.lockin/` is not ignored, ask once whether to append `/.lockin/` to the file that `git rev-parse --git-path info/exclude` names. That file is local and not versioned. Add a newline first if the file does not end with one, so you do not corrupt the last rule. Run `git check-ignore -q .lockin/` again and warn if it still fails. Never edit `.gitignore`. If the user declines, warn that `.lockin/` must never be committed.
 
 ## Phase 2 - Plan and challenge
 
@@ -59,12 +118,12 @@ Goal of this phase: a plan that survived an independent critical review.
 
 ### 2.1 Write the plan
 
-Write the plan yourself in the main session. You hold the full context, so the plan belongs here and not in a subagent. The plan contains:
+Write the plan yourself in the main session. You hold the full context, so the plan belongs here and not in a subagent. Save it to `.lockin/<slug>/plan.md`. The plan contains:
 
 - Approach and the main design decisions with reasons
 - Files to create, change or delete, with the intended change per file
 - Data, API or schema changes and their migration path
-- Test strategy: which tests to add or adapt, which commands prove the change works
+- Test strategy: which tests to add or adapt, which commands prove the change works. Without automated tests, name the manual checks.
 - Risks you already see and how the plan handles them
 
 ### 2.2 Challenge the plan
@@ -84,12 +143,12 @@ For each objection decide:
 - **Accept**: revise the plan.
 - **Reject**: write down a concrete reason. "Not relevant" is no reason. Explain why the risk does not apply or why the cost outweighs the benefit.
 
-Keep a running list of rejected objections with reasons. The user sees this list in Phase 3.
+Keep a running list of rejected objections with reasons. The user sees this list in Phase 3. After each round, record every objection with your decision in the challenge log in `state.md` and update `plan.md`.
 
 ### 2.4 Loop rules
 
 - Run at most 3 challenge rounds. Diminishing returns set in fast, and each round costs an Opus call.
-- Stop as soon as a round returns no critical objections.
+- Stop as soon as the verdict line of a round reads `NO CRITICAL OBJECTIONS`.
 - If critical objections remain after round 3, do not loop further. Carry them into Phase 3 and let the user decide.
 
 ## Phase 3 - Approval
@@ -101,11 +160,13 @@ Show the user:
 1. The final plan
 2. The rejected objections with your reasons
 3. Unresolved critical objections, if any
-4. The planned work packages as a short list (details follow in Phase 4)
+4. The planned work packages as a short list with the model per package (details follow in Phase 4)
 
 Then stop and wait for explicit approval, such as "approved", "go" or "yes, implement it".
 
-Do not change any project file before approval. The user owns architecture and scope decisions, and a change made before approval is a decision taken away from them. Silence, a follow-up question or a partial comment is not approval. If the user requests changes, revise the plan and show it again. Run another challenge round only if the changes are substantial.
+Do not change any project file before approval. The user owns architecture and scope decisions, and a change made before approval is a decision taken away from them. Silence, a follow-up question or a partial comment is not approval. If the user requests changes, revise the plan, update `plan.md` and show it again. Run another challenge round only if the changes are substantial.
+
+After the approval, check that `plan.md` holds exactly the approved plan. Then write the approval record to `state.md`: the user's words, the date and the hash from `git hash-object .lockin/<slug>/plan.md`.
 
 ## Phase 4 - Implementation
 
@@ -113,7 +174,7 @@ Goal of this phase: the approved plan, implemented in small verified steps.
 
 ### 4.1 Split the plan into work packages
 
-Cut the plan into packages that each leave the project in a working state. Order them by dependency. Prefer more small packages over few large ones, because the implementer runs on a small model and works best with narrow, explicit instructions.
+Cut the plan into packages that each leave the project in a working state. Order them by dependency. Prefer more small packages over few large ones, because the implementer runs on Haiku by default and works best with narrow, explicit instructions.
 
 Every package must be fully self-contained. The implementer does not see the conversation, the plan discussion or other packages. Use this template:
 
@@ -138,31 +199,44 @@ typing, error handling, test structure.>
 - <Verifiable criterion>
 - <Verifiable criterion>
 
-### Test command
+### Verification
 `<exact command, e.g. vendor/bin/phpunit tests/Unit/FooTest.php>`
+or: No automated tests. Manual check: <exact steps>
 
 ### Out of scope
 <What the implementer must not touch.>
+Pre-existing user changes, never modify: <paths or "none">
 ```
 
 If a package needs a decision you have not made, make it now and write it into the package. The implementer is not allowed to make architecture decisions.
 
-### 4.2 Run the packages one by one
+Pick the model per package. The default is Haiku from the agent definition. Pass `model: "sonnet"` to the Agent tool when a package changes logic across more than one file or needs non-trivial algorithms or type reasoning. Do not use Opus for implementation.
+
+### 4.2 Set the base and run the packages
+
+Before the first package:
+
+1. Record a fresh status snapshot, because the tree may have changed since Phase 1.
+2. If a changed file is also a package file, stop. Explain that the change cannot be reviewed in isolation and ask the user to commit or stash that file. Never stash or commit yourself.
+3. List all other changed and untracked files as pre-existing user changes. Build the list as described in the git rules above. Exclude these paths from every diff, for example `git diff <base> -- . ':(exclude).lockin' ':(exclude,literal)<path>'`.
+4. Record the base with `git rev-parse HEAD`, or the empty tree from `git hash-object -t tree /dev/null` for a repo without commits. Write the base, the pre-existing list and this snapshot to `state.md` as the final baseline.
+5. Fill the pre-existing list into every package and write each package to `.lockin/<slug>/packages/<n>.md`.
 
 For each package:
 
-1. Delegate it to `lowkey:lockin-implementer`.
+1. Set its status to `in_progress` in `state.md`. Then delegate it to `lowkey:lockin-implementer` with the chosen model.
 2. Check the result before you start the next package:
    - Read the report.
-   - Inspect the actual change with `git diff` on the affected files. Trust the diff, not the report.
-   - Run the test command yourself if the report shows no clean run.
+   - Inspect the actual change with `git diff <base>` on the affected files. Trust the diff, not the report.
+   - Run the verification yourself if the report shows no clean run. Run only commands the user confirmed in 1.3 or approved with the plan. Take a status snapshot afterwards and stop if a command changed files.
    - Compare the change against the acceptance criteria.
-3. If the result is wrong or incomplete, write a corrected package that names the concrete problem and delegate again. After two failed attempts on the same package, implement it yourself or ask the user.
-4. If the implementer reports `BLOCKED`, resolve the question. Ask the user when the answer changes scope or architecture. Then update the package and delegate again.
+3. If the result is correct, set the status to `done`.
+4. If the result is wrong or incomplete, write a corrected package that names the concrete problem and delegate again. Attempt 1 runs on the planned model, attempt 2 on Sonnet. After that, implement it yourself or ask the user. Set the status to `failed` if the user stops the package.
+5. If the implementer reports `BLOCKED`, set the status to `blocked` and resolve the question. Ask the user when the answer changes scope or architecture. Then update the package and delegate again.
 
 Run packages sequentially. Later packages build on earlier ones, and a defect caught early is cheaper than a defect spread across three packages.
 
-If you discover during implementation that the approved plan does not work, stop. Explain the problem to the user and get approval for the changed plan before you continue.
+If you discover during implementation that the approved plan does not work, stop. Explain the problem to the user and get approval for the changed plan before you continue. Then update `plan.md` and write the new approval with the new hash to `state.md`.
 
 ## Phase 5 - Review
 
@@ -172,9 +246,9 @@ Goal of this phase: an independent review of the complete change.
 
 The reviewers have no Bash access. They only read files, so a review cannot change the code under review or trigger side effects. You run the commands for them:
 
-1. Run `git diff <base>` against the state before Phase 4. Use plain `git diff` if all changes are uncommitted in the working tree.
-2. Run `git status --porcelain` and collect new untracked files. `git diff` does not show them, so list their paths separately. The reviewers read them with the Read tool.
-3. Run every test, lint and static analysis command from the work packages and the project `CLAUDE.md`. Capture the complete output, including the exit status of each command.
+1. Run `git diff <base> -- . ':(exclude).lockin'` with one more `':(exclude,literal)<path>'` per pre-existing path. The diff contains staged and unstaged changes.
+2. List the untracked files as described in the git rules. New files are the untracked paths missing from the pre-existing list of 4.2. `git diff` does not show them, so list their paths separately. The reviewers read them with the Read tool.
+3. Run every test, lint and static analysis command from the work packages and the project `CLAUDE.md` that the user confirmed in 1.3 or approved with the plan. Use check variants as in 1.3. Capture the complete output, including the exit status of each command. Take a status snapshot afterwards and stop if a command changed files. Without automated tests, run the manual checks from the packages and record what you checked.
 
 Pass diff and test output unshortened. The reviewers cannot rerun anything, so every line you cut is a line they cannot check. If a test command fails, still pass the full output and do not fix anything before the review.
 
@@ -185,7 +259,9 @@ Delegate to `lowkey:lockin-reviewer-correctness` and `lowkey:lockin-reviewer-ris
 - The task brief and the final approved plan
 - The complete diff
 - Paths of new untracked files
-- Each test command with its exit status and complete output
+- Each test command with its exit status and complete output, or the statement that the project has no automated tests with the manual checks
+- The baseline test results from Phase 1
+- The list of pre-existing user changes, marked as user work that is not under review
 - Relevant `CLAUDE.md` rules
 
 ### 5.3 Process the findings
@@ -195,17 +271,20 @@ Handle every finding:
 - **Fix**: implement the fix directly or as a new work package through `lowkey:lockin-implementer`. Verify it like any other package.
 - **Reject**: write down a concrete reason.
 
-Do not drop findings silently. A rejected finding with a reason helps the user, a missing finding hides a risk.
+Do not drop findings silently. A rejected finding with a reason helps the user, a missing finding hides a risk. Record every finding with your decision in `state.md`.
 
 After substantial fixes, collect diff and test output again as in 5.1 and run the affected reviewer on the new state. Limit this to one extra review round, then report remaining findings as open.
 
 ## Wrap-up
 
-Give the user a final summary:
+Set `current_phase` to `wrap-up` in `state.md`. Then give the user a final summary:
 
 - **Implemented**: what changed, per work package
 - **Findings**: fixed findings, rejected findings with reasons, open findings
 - **Tests**: which commands ran and their result. Report failures with output, never hide them.
 - **Deviations**: any difference from the approved plan and why
+- **Commit proposal**: a commit message in the style of `git log --oneline -10`, or in Conventional Commits style if the log is empty. Add a PR description draft with summary, changes per package, test results and open findings. List the exact paths to stage: the output of `git -c core.quotePath=false diff <base> --name-only --no-renames` with the same excludes as in 5.1, plus the new files from 5.1.
 
-Do not commit and do not push unless the user asks for it. The user reviews the change first and decides how it enters the history.
+Set `current_phase` to `done` in `state.md` and tell the user that they may delete `.lockin/<slug>/`.
+
+Do not commit and do not push unless the user asks for it. The user reviews the change first and decides how it enters the history. If the user asks for a commit, show `git status` and `git diff --cached --name-only` first. If the index already holds paths outside the list, ask the user to unstage them or to confirm them. Stage only the listed paths.

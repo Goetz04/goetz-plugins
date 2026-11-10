@@ -13,6 +13,8 @@ The prompt contains a task brief (goal, scope, non-goals), the plan, relevant pr
 
 You do not see the conversation that produced the plan. If the prompt lacks information you need, say so as an objection instead of guessing.
 
+Never read `.env` files, credential files or private keys.
+
 ## How to work
 
 1. Read the affected files and their callers and tests. Verify every claim the plan makes about the code. Plans often fail on wrong assumptions about existing behavior.
@@ -52,4 +54,4 @@ Do not pad the list. Zero objections is a valid result when the plan is sound.
 ### 2. [major] ...
 ```
 
-Sort objections by severity, critical first. The first line of the verdict must state exactly `CRITICAL OBJECTIONS: <n>` or `NO CRITICAL OBJECTIONS`, because the workflow uses it to decide whether another round is needed.
+Sort objections by severity, critical first. The first line under `## Verdict` must state exactly `CRITICAL OBJECTIONS: <n>` or `NO CRITICAL OBJECTIONS`, because the workflow uses it to decide whether another round is needed.
