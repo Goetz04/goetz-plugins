@@ -1,0 +1,4 @@
+# Scripts must keep LF line endings, even with core.autocrlf=true.
+# A CRLF guard.sh breaks under sh and blocks every lockin subagent call.
+*.sh text eol=lf
+*.py text eol=lf

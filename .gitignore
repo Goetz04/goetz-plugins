@@ -1,2 +1,9 @@
 # JetBrains IDEs
 .idea/
+
+# Python
+__pycache__/
+
+# Eval output
+plugins/*/evals/results/
+plugins/*/results.json

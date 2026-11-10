@@ -54,4 +54,4 @@ Do not pad the list. Zero objections is a valid result when the plan is sound.
 ### 2. [major] ...
 ```
 
-Sort objections by severity, critical first. The first line under `## Verdict` must state exactly `CRITICAL OBJECTIONS: <n>` or `NO CRITICAL OBJECTIONS`, because the workflow uses it to decide whether another round is needed.
+Sort objections by severity, critical first. The first line under `## Verdict` must state exactly `CRITICAL OBJECTIONS: <n>` or `NO CRITICAL OBJECTIONS`, because the workflow uses it to decide whether another round is needed. Use `CRITICAL OBJECTIONS: <n>` only for n of 1 or more. Without critical objections, write `NO CRITICAL OBJECTIONS`.

@@ -2,6 +2,24 @@
 
 All notable changes to the lowkey plugin are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-11-10
+
+### Added
+
+- Automatic cleanup. The wrap-up deletes `.lockin/<slug>/` after the summary. `--keep` keeps the state of a run.
+- `review/` folder for diff, new file list and redacted test output. The reviewers read these files instead of receiving them inline. The folder gets deleted at the end of Phase 5.
+- The tree fingerprint hashes the content of untracked files, so resume detects changes to new files.
+- Guard hook for the lockin subagents (`hooks/hooks.json`, `guard.sh`, `guard.py`). It blocks secret files for all four agents. For the implementer it also blocks writes to `.lockin/`, git commands other than read-only ones and package installs. The guard fails closed for lockin agents and never affects other agents or the main session. It needs `python3`.
+- Eval suite in `evals/` with four cases for the gates of the workflow: empty arguments, analysis-only exit, resume without runs and no changes before approval.
+
+### Changed
+
+- `plan.md` contains the work package list with files and model. The approval hash covers it, and Phase 4 only expands the approved list.
+- The `Verification` field of a work package may only contain user-confirmed commands. The implementer runs only these commands and read-only git.
+- The implementer receives the path of its package file instead of the full text.
+- The challenge loop also stops on `CRITICAL OBJECTIONS: 0`. The plan challenger uses this form only for one or more objections.
+- The resume instructions moved to `skills/lockin/resume.md` and load only on `--resume`.
+
 ## [1.1.0] - 2026-11-10
 
 ### Added
