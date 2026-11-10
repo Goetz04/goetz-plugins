@@ -100,7 +100,7 @@ claude plugin validate . --strict       # marketplace manifest
 claude plugin validate plugins/lowkey --strict
 ```
 
-CI runs these checks on every push and pull request. The eval suite in `plugins/lowkey/evals/` runs real model calls and costs money, so it runs only on demand through the `Evals` workflow, which needs the repository secret `ANTHROPIC_API_KEY`. To run it locally, install `bubblewrap` and `socat` first, because the cases grant Bash and need the sandbox:
+CI runs these checks on every push and pull request. The eval suite in `plugins/lowkey/evals/` runs locally only, before a release. Every case makes real model calls against your Claude login, so it counts against your plan usage. Install `bubblewrap` and `socat` first, because the cases grant Bash and need the sandbox. The `gate` tag holds the more expensive case `gates-before-changes`:
 
 ```text
 cd plugins/lowkey
