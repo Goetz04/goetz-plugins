@@ -29,8 +29,8 @@ Every release bumps the version in `plugin.json`. See the [changelog](plugins/lo
 ## Usage
 
 ```text
-/lowkey:lockin <issue-number or task>
-/lowkey:lockin --resume [slug]
+/lowkey:lockin [--keep] <issue-number or task>
+/lowkey:lockin --resume [slug] [--keep]
 ```
 
 Examples:
@@ -38,6 +38,7 @@ Examples:
 ```text
 /lowkey:lockin 13
 /lowkey:lockin "Add rate limiting to the public search API"
+/lowkey:lockin --keep "Migrate the session store to Redis"
 /lowkey:lockin --resume 2026-11-10-rate-limiting
 ```
 
@@ -50,17 +51,19 @@ The skill only runs when you invoke it explicitly. Claude does not start it on i
 | Phase | What happens |
 |---|---|
 | 1. Understand | Reads the issue or task, the project `CLAUDE.md` and all affected files. Records a baseline: HEAD, working tree status and check-mode test results. States goal, scope and non-goals and creates the state folder with `state.md`. |
-| 2. Plan and challenge | The main session writes the plan. `lockin-plan-challenger` challenges it, for up to 3 rounds or until no critical objections remain. |
-| 3. Approval | Shows the final plan, the rejected objections with reasons and the work packages with their model. Waits for your explicit approval and records it with a hash of the plan. No code changes before that. |
-| 4. Implementation | Records the git base and blocks if your uncommitted changes overlap the planned files. Splits the plan into self-contained work packages. `lockin-implementer` implements them one by one. The main session verifies each result before the next package starts. |
-| 5. Review | The main session runs `git diff` and all test commands. `lockin-reviewer-correctness` and `lockin-reviewer-risk` review the full diff and test output. Every finding gets fixed or rejected with a reason. |
-| Wrap-up | Summary of implemented changes, open findings and test runs, plus a commit message, a PR description draft and the exact paths to stage. No commit and no push unless you ask. |
+| 2. Plan and challenge | The main session writes the plan, including the list of work packages with files and model. `lockin-plan-challenger` challenges it, for up to 3 rounds or until no critical objections remain. |
+| 3. Approval | Shows the final plan, the rejected objections with reasons and the work packages with their model. Waits for your explicit approval and records it with a hash of the plan, which covers the package list. No code changes before that. |
+| 4. Implementation | Records the git base and blocks if your uncommitted changes overlap the planned files. Expands the approved package list into self-contained work packages. Their verification may only use test commands you confirmed. `lockin-implementer` implements them one by one. The main session verifies each result before the next package starts. |
+| 5. Review | The main session writes the diff and the redacted test output to `.lockin/<slug>/review/`. `lockin-reviewer-correctness` and `lockin-reviewer-risk` read these files and review the full change. Every finding gets fixed or rejected with a reason. The review files get deleted at the end of the phase. |
+| Wrap-up | Summary of implemented changes, open findings and test runs, plus a commit message, a PR description draft and the exact paths to stage. Deletes `.lockin/<slug>/` unless you passed `--keep`. No commit and no push unless you ask. |
 
 ## State files
 
-The skill keeps its state in `.lockin/<slug>/` at the repository root: `state.md` (brief, baseline, challenge log, approval, package status, findings), `plan.md` and one file per work package under `packages/`. This lets you continue a run after a context compaction or in a new session with `--resume`. A recorded approval is never enough on resume. The skill asks you again before it continues implementing.
+The skill keeps its state in `.lockin/<slug>/` at the repository root: `state.md` (brief, baseline, challenge log, approval, package status, findings), `plan.md` with the work package list, one file per work package under `packages/` and, during the review only, the diff and test output under `review/`. This lets you continue a run after a context compaction or in a new session with `--resume`. A recorded approval is never enough on resume. The skill asks you again before it continues implementing.
 
-The skill offers to add `.lockin/` to `.git/info/exclude`. It never edits your `.gitignore`. Do not commit `.lockin/`. Delete the folder when the run is done.
+The skill offers to add `.lockin/` to `.git/info/exclude`. It never edits your `.gitignore`. Do not commit `.lockin/`.
+
+A finished run cleans up after itself. The skill deletes `review/` at the end of Phase 5, because it holds raw test output. Test output gets redacted for tokens, passwords and keys before the reviewers read it. After the wrap-up summary, the skill deletes `.lockin/<slug>/`. `.lockin/` is not versioned, so the delete is final. Pass `--keep` to keep the state of a run, for example to debug it. An interrupted run always keeps its state for `--resume`.
 
 ## Subagents
 
@@ -71,7 +74,7 @@ The skill offers to add `.lockin/` to `.git/info/exclude`. It never edits your `
 | `lockin-reviewer-correctness` | Sonnet | Read, Grep, Glob | Correctness, plan adherence, tests, `CLAUDE.md` conventions |
 | `lockin-reviewer-risk` | Sonnet | Read, Grep, Glob | Security, edge cases, performance, side effects |
 
-The reviewers have no Bash access, so they cannot change the code under review or run commands with side effects. The main session runs `git diff` and the test commands and passes the complete diff and test output to both reviewers.
+The reviewers have no Bash access, so they cannot change the code under review or run commands with side effects. The main session runs `git diff` and the test commands and writes the complete diff and test output to files that both reviewers read.
 
 The implementer runs on Haiku by default. The main session switches to Sonnet for packages with logic across several files and for the second attempt on a failed package.
 
