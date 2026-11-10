@@ -1,0 +1,25 @@
+{
+  "name": "goetz",
+  "description": "Claude Code plugins by Goetz for structured, reviewable software development workflows.",
+  "owner": {
+    "name": "Goetz",
+    "url": "https://github.com/Goetz04"
+  },
+  "plugins": [
+    {
+      "name": "lowkey",
+      "source": "./plugins/lowkey",
+      "description": "Lock in on big, important tasks: understand, plan, challenge, get approval, implement in isolated work packages and review with dedicated subagents.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Goetz",
+        "url": "https://github.com/Goetz04"
+      },
+      "license": "MIT",
+      "homepage": "https://github.com/Goetz04/goetz-plugins",
+      "repository": "https://github.com/Goetz04/goetz-plugins",
+      "keywords": ["workflow", "planning", "code-review", "subagents", "implementation"],
+      "category": "development"
+    }
+  ]
+}
