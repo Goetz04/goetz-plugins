@@ -1,0 +1,28 @@
+schema_version: "1.1"
+name: analysis-only
+description: A pure analysis request takes the analysis-only exit without state or subagents.
+tags: [smoke]
+runs: 1
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: no-state-folder
+    type: file_exists
+    path: ".lockin/**"
+    exists: false
+  # The subagent tool is named Agent or Task depending on the version, so match its input field.
+  - name: no-subagents
+    type: regex
+    target: trace
+    pattern: "subagent_type"
+    match: not_contains
+  - name: no-edits
+    type: tool_used
+    tool: Edit
+    min: 0
+    max: 0
+  - name: no-writes
+    type: tool_used
+    tool: Write
+    min: 0
+    max: 0

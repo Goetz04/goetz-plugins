@@ -78,6 +78,35 @@ The reviewers have no Bash access, so they cannot change the code under review o
 
 The implementer runs on Haiku by default. The main session switches to Sonnet for packages with logic across several files and for the second attempt on a failed package.
 
+## Guard hook
+
+The plugin ships a `PreToolUse` hook that enforces the hard rules of the subagents instead of trusting the prompt alone. It only acts on the four lockin agents. Other agents and the main session pass through unchanged.
+
+| Rule | Agents | Blocks |
+|---|---|---|
+| No secrets | all four | Read, Edit, Write, Grep and Bash on `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `.netrc`, `.pgpass`, `auth.json`, `credentials` and `credentials.<ext>` except Markdown. `.env.example`, `.env.dist` and `.env.sample` stay readable. |
+| State stays untouched | implementer | Edit, Write and Bash on `.lockin/`. Reading its own package file is allowed. |
+| Read-only git | implementer | Every git subcommand except `diff`, `status`, `log`, `show`, `ls-files`, `rev-parse`, `blame` and `grep` |
+| No installs | implementer | `npm`, `pnpm`, `yarn`, `composer`, `pip`, `uv`, `apt` and `brew` install commands |
+
+The hook needs `python3` and `sh`. It fails closed for the lockin agents. If `python3` is missing or the hook itself fails, the lockin agents get blocked with a message that names the cause. The guard matches command patterns, so it is a second line of defense and no sandbox. Native Windows without a POSIX shell is not supported, use WSL.
+
+## Development
+
+```text
+python3 -m unittest discover tests      # guard hook tests
+python3 scripts/check_metadata.py       # marketplace.json and plugin.json agree
+claude plugin validate . --strict       # marketplace manifest
+claude plugin validate plugins/lowkey --strict
+```
+
+CI runs these checks on every push and pull request. The eval suite in `plugins/lowkey/evals/` runs real model calls and costs money, so it runs only on demand through the `Evals` workflow, which needs the repository secret `ANTHROPIC_API_KEY`. To run it locally, install `bubblewrap` and `socat` first, because the cases grant Bash and need the sandbox:
+
+```text
+cd plugins/lowkey
+claude plugin eval . --tag smoke --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent --max-cost-usd 2
+```
+
 ## Cost
 
 This workflow uses noticeably more tokens than a regular session. The plan challenger runs on Opus for up to three rounds, and every run starts several subagents for implementation and review. Use it for tasks where a wrong plan or an unreviewed change costs more than the extra tokens, not for small fixes.

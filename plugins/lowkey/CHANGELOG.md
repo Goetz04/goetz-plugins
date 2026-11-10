@@ -9,6 +9,8 @@ All notable changes to the lowkey plugin are documented in this file. The format
 - Automatic cleanup. The wrap-up deletes `.lockin/<slug>/` after the summary. `--keep` keeps the state of a run.
 - `review/` folder for diff, new file list and redacted test output. The reviewers read these files instead of receiving them inline. The folder gets deleted at the end of Phase 5.
 - The tree fingerprint hashes the content of untracked files, so resume detects changes to new files.
+- Guard hook for the lockin subagents (`hooks/hooks.json`, `guard.sh`, `guard.py`). It blocks secret files for all four agents. For the implementer it also blocks writes to `.lockin/`, git commands other than read-only ones and package installs. The guard fails closed for lockin agents and never affects other agents or the main session. It needs `python3`.
+- Eval suite in `evals/` with four cases for the gates of the workflow: empty arguments, analysis-only exit, resume without runs and no changes before approval.
 
 ### Changed
 

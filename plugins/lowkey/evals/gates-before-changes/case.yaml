@@ -1,0 +1,24 @@
+schema_version: "1.1"
+name: gates-before-changes
+description: A real change request stops for user confirmation before any project change or implementation.
+tags: [gate]
+runs: 1
+context:
+  scaffold_script: scaffold.sh
+graders:
+  # The subagent tool is named Agent or Task depending on the version, so match its input field.
+  - name: no-subagents
+    type: regex
+    target: trace
+    pattern: "subagent_type"
+    match: not_contains
+  - name: no-edits
+    type: tool_used
+    tool: Edit
+    min: 0
+    max: 0
+  - name: no-writes
+    type: tool_used
+    tool: Write
+    min: 0
+    max: 0

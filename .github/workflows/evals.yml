@@ -1,0 +1,60 @@
+name: Evals
+
+# Manual only: every eval run is a paid model call.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Case tag to run (smoke, gate or all)"
+        required: true
+        default: smoke
+      max_cost_usd:
+        description: "Cost ceiling in USD"
+        required: true
+        default: "5"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    name: lowkey evals
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install sandbox dependencies
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.322
+      - name: Run evals
+        working-directory: plugins/lowkey
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EVAL_TAG: ${{ inputs.tag }}
+          EVAL_MAX_COST: ${{ inputs.max_cost_usd }}
+        run: |
+          tag_args=()
+          if [ "$EVAL_TAG" != "all" ]; then
+            tag_args=(--tag "$EVAL_TAG")
+          fi
+          claude plugin eval . "${tag_args[@]}" \
+            --json results.json \
+            --trust-plugin \
+            --scaffold \
+            --no-publish \
+            --allow-tools Bash Edit Write Agent \
+            --model claude-sonnet-5-5 \
+            --judge-model claude-haiku-5-5 \
+            --max-cost-usd "$EVAL_MAX_COST"
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lowkey-eval-results
+          path: |
+            plugins/lowkey/results.json
+            plugins/lowkey/evals/results/
+          if-no-files-found: warn

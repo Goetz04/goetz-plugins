@@ -236,6 +236,7 @@ For each package:
 3. If the result is correct, set the status to `done`.
 4. If the result is wrong or incomplete, write a corrected package to `packages/<n>.md` that names the concrete problem and delegate again. Attempt 1 runs on the planned model, attempt 2 on Sonnet. After that, implement it yourself or ask the user. Set the status to `failed` if the user stops the package.
 5. If the implementer reports `BLOCKED`, set the status to `blocked` and resolve the question. Ask the user when the answer changes scope or architecture. Then update `packages/<n>.md` and delegate again.
+6. If the report or a tool error contains `lowkey guard:`, the plugin's guard hook blocked a call. Treat it like `BLOCKED`. Show the user the blocked call and the reason. Never rephrase the command to get past the guard, and never tell the implementer to do so. If the package truly needs the call, the user decides, and you run it yourself after their approval.
 
 Run packages sequentially. Later packages build on earlier ones, and a defect caught early is cheaper than a defect spread across three packages.
 

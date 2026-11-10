@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Guard tests and metadata
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Guard hook tests
+        run: python -m unittest discover tests -v
+      - name: Metadata consistency
+        run: python scripts/check_metadata.py
+
+  validate:
+    name: Validate plugin manifests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.322
+      - name: Validate marketplace
+        run: claude plugin validate . --strict
+      - name: Validate lowkey plugin
+        run: claude plugin validate plugins/lowkey --strict
