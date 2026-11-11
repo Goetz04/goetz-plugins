@@ -1,9 +1,9 @@
 {
-  "description": "Guard for the lockin subagents: blocks secret files, writes to .lockin/, git writes and package installs. Other agents and the main session pass through.",
+  "description": "Guard for the lockin subagents: blocks secret files, writes outside the repository or to .lockin/ and .git/, git writes, nested shells and package installs. Other agents and the main session pass through.",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "^(Bash|Read|Edit|Write|Grep)$",
+        "matcher": "^(Bash|Read|Edit|Write|Grep|Glob)$",
         "hooks": [
           {
             "type": "command",

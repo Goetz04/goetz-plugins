@@ -84,12 +84,14 @@ The plugin ships a `PreToolUse` hook that enforces the hard rules of the subagen
 
 | Rule | Agents | Blocks |
 |---|---|---|
-| No secrets | all four | Read, Edit, Write, Grep and Bash on `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `.netrc`, `.pgpass`, `auth.json`, `credentials` and `credentials.<ext>` except Markdown. `.env.example`, `.env.dist` and `.env.sample` stay readable. |
+| No secrets | all four | Read, Edit, Write, Grep, Glob and Bash on `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `.netrc`, `.pgpass`, `auth.json`, `credentials` and `credentials.<ext>` except Markdown. `.env.example`, `.env.dist` and `.env.sample` stay readable. Bash checks also catch quoted names like `.e""nv` and globs like `.en?`. |
 | State stays untouched | implementer | Edit, Write and Bash on `.lockin/`. Reading its own package file is allowed. |
+| Writes stay in the repo | implementer | Edit and Write outside the repository root and under `.git/`. Symlinks get resolved first. |
+| No nested shells | implementer | `sh`, `bash`, `zsh`, `dash`, `ksh` and `fish` with `-c`, plus `eval`. Running a script file stays allowed. |
 | Read-only git | implementer | Every git subcommand except `diff`, `status`, `log`, `show`, `ls-files`, `rev-parse`, `blame` and `grep` |
-| No installs | implementer | `npm`, `pnpm`, `yarn`, `composer`, `pip`, `uv`, `apt` and `brew` install commands |
+| No installs | implementer | Install, update and remove commands of `npm`, `pnpm`, `yarn`, `bun`, `composer`, `pip`, `pipx`, `uv`, `poetry`, `cargo`, `gem`, `bundle`, `go`, `conda`, `mamba`, `apt`, `dnf`, `yum`, `apk` and `brew`, also behind global options. `npx`, `npm exec` and `bunx` only with `--yes` or `--package`, plus `pnpm dlx` and `yarn dlx`. |
 
-The hook needs `python3` and `sh`. It fails closed for the lockin agents. If `python3` is missing or the hook itself fails, the lockin agents get blocked with a message that names the cause. The guard matches command patterns, so it is a second line of defense and no sandbox. Native Windows without a POSIX shell is not supported, use WSL.
+The hook needs `python3` and `sh`. It fails closed for the lockin agents. If `python3` is missing or the hook itself fails, the lockin agents get blocked with a message that names the cause. The guard matches command patterns, so it is a second line of defense and no sandbox. Known gaps: Bash commands can still write outside the repository, a script file or `python -c` can run anything, brace expansion like `.{e,x}nv` hides a secret name, and `npx` without `--yes` may fetch a missing package. The diff check in the main session and the review phase cover what the guard misses. Native Windows without a POSIX shell is not supported, use WSL.
 
 ## Development
 
@@ -100,7 +102,7 @@ claude plugin validate . --strict       # marketplace manifest
 claude plugin validate plugins/lowkey --strict
 ```
 
-CI runs these checks on every push and pull request. The eval suite in `plugins/lowkey/evals/` runs real model calls and costs money, so it runs only on demand through the `Evals` workflow, which needs the repository secret `ANTHROPIC_API_KEY`. To run it locally, install `bubblewrap` and `socat` first, because the cases grant Bash and need the sandbox:
+CI runs these checks on every push and pull request. The eval suite in `plugins/lowkey/evals/` runs locally only, before a release. Every case makes real model calls against your Claude login, so it counts against your plan usage. Install `bubblewrap` and `socat` first, because the cases grant Bash and need the sandbox. The `gate` tag holds the more expensive case `gates-before-changes`:
 
 ```text
 cd plugins/lowkey
