@@ -2,6 +2,34 @@
 
 All notable changes to the lowkey plugin are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-11-11
+
+### Added
+
+- Python scripts for the deterministic steps in `skills/lockin/scripts/`: `snapshot.py` (status snapshot and path lists), `collect_review.py` (`prepare` writes the review folder, diff and new file list, `run` runs one test command with a timeout and stops on file changes), `redact.py` (idempotent redaction of test output, exit 1 on remaining hits) and `cleanup.py` (checked delete of `review/` or the run folder). Tests in `tests/lowkey/test_scripts.py` use temporary git repositories with spaces, quotes and umlauts in paths. The scripts need Python 3.9 or newer.
+- Run stats in `state.md`: challenge rounds, attempts per package with model and findings per reviewer with decision. The wrap-up prints them in a short block.
+- `--lite` flag, combinable with `--keep`: one challenge round instead of three and the new combined reviewer `lockin-reviewer` instead of two. All gates stay. The mode stays in `state.md` and survives `--resume`.
+- Issue backchannel for issue input, only after an explicit yes: the approved plan as an issue comment, and a draft pull request or merge request in the wrap-up once the user committed and pushed. The skill never commits or pushes.
+- New skill `/lowkey:review` for a pull request, a branch, a `<base>..<head>` range or, without argument, the current branch against the merge-base of the default branch. It runs confirmed test commands, redacts their output, starts both reviewers in parallel and reports the findings without changing code.
+- Evals `review-no-args` (smoke) and `plan-approval-gate` (gate). The gate case needs `--ablation none`, because the baseline arm cannot start plugin agents.
+
+### Changed
+
+- `SKILL.md` keeps the overview, state, git rules and Phases 1 to 3. Phase 4 moved to `phase-4.md`, Phase 5 and the wrap-up to `phase-5.md`. The rules for cutting work packages and picking models moved from 4.1 to 2.1, because the plan needs them before the approval.
+- The tree fingerprint comes from `snapshot.py`. A resumed run from 1.3 or older shows a fingerprint mismatch once.
+- The `diff` part of the status snapshot uses `--no-color --no-ext-diff --no-textconv`, so user diff settings cannot change it.
+- The reviewer agents accept runs without plan or baseline.
+- The guard covers the new agent `lowkey:lockin-reviewer`.
+- CI runs the tests on Python 3.9 and 3.12. The job now reports one check per Python version, so a branch protection rule on the old check name `Guard tests and metadata` needs an update.
+- `redact.py` also covers URL credentials, common token prefixes, cookie headers, escaped quotes and unterminated private key blocks, and runs in linear time on long lines.
+- `collect_review.py run` kills the whole process group after the command, also on SIGINT and SIGTERM. The scripts refuse refs that start with `-`.
+- The skill text passes test commands, refs and PR titles in single quotes. `/lowkey:review` uses full SHAs after resolving refs and warns before running tests of outside pull requests. Issue comment and draft PR show the exact text before the yes.
+
+### Notes
+
+- The grader syntax of the new evals (`input_match`, file targets for `regex`) and the `glab` flags come from the documentation and are not verified by a local run yet.
+- Worktree isolation for the implementer is not implemented. Plugin agents accept `isolation: worktree`, but subagent worktrees branch from the default branch unless the user sets `worktree.baseRef: "head"`, which a plugin cannot set.
+
 ## [1.3.0] - 2026-11-11
 
 ### Added

@@ -6,7 +6,7 @@ A Claude Code plugin marketplace by [Goetz](https://github.com/Goetz04).
 
 ### lowkey
 
-Lock in on big, important tasks. The `lockin` skill runs a gated workflow: understand the task, write a plan and let an independent subagent challenge it, wait for your approval, implement in small self-contained work packages and review the full diff with two dedicated reviewers.
+Lock in on big, important tasks. The `lockin` skill runs a gated workflow: understand the task, write a plan and let an independent subagent challenge it, wait for your approval, implement in small self-contained work packages and review the full diff with two dedicated reviewers. The `review` skill reviews an existing branch or pull request with the same reviewers, without changing code.
 
 ## Installation
 
@@ -29,8 +29,9 @@ Every release bumps the version in `plugin.json`. See the [changelog](plugins/lo
 ## Usage
 
 ```text
-/lowkey:lockin [--keep] <issue-number or task>
+/lowkey:lockin [--keep] [--lite] <issue-number or task>
 /lowkey:lockin --resume [slug] [--keep]
+/lowkey:review [pr-number | branch | <base>..<head>]
 ```
 
 Examples:
@@ -39,10 +40,13 @@ Examples:
 /lowkey:lockin 13
 /lowkey:lockin "Add rate limiting to the public search API"
 /lowkey:lockin --keep "Migrate the session store to Redis"
+/lowkey:lockin --lite "Add a CSV export to the report page"
 /lowkey:lockin --resume 2026-11-10-rate-limiting
 ```
 
 With an issue number, the skill reads the issue through `gh` (GitHub) or `glab` (GitLab) if available. Otherwise it treats the argument as the task description. If the task only asks for an analysis, the skill delivers the analysis and asks whether to continue with a change. The skill requires a git repository.
+
+`--lite` runs one challenge round instead of three and one combined reviewer instead of two. All gates stay. With issue input, the skill offers to post the approved plan as an issue comment and to open a draft pull request in the wrap-up. Both need your explicit yes. Commit and push stay with you.
 
 The skill only runs when you invoke it explicitly. Claude does not start it on its own.
 
@@ -51,15 +55,30 @@ The skill only runs when you invoke it explicitly. Claude does not start it on i
 | Phase | What happens |
 |---|---|
 | 1. Understand | Reads the issue or task, the project `CLAUDE.md` and all affected files. Records a baseline: HEAD, working tree status and check-mode test results. States goal, scope and non-goals and creates the state folder with `state.md`. |
-| 2. Plan and challenge | The main session writes the plan, including the list of work packages with files and model. `lockin-plan-challenger` challenges it, for up to 3 rounds or until no critical objections remain. |
-| 3. Approval | Shows the final plan, the rejected objections with reasons and the work packages with their model. Waits for your explicit approval and records it with a hash of the plan, which covers the package list. No code changes before that. |
+| 2. Plan and challenge | The main session writes the plan, including the list of work packages with files and model. `lockin-plan-challenger` challenges it, for up to 3 rounds or until no critical objections remain. In lite mode it runs one round. |
+| 3. Approval | Shows the final plan, the rejected objections with reasons and the work packages with their model. Waits for your explicit approval and records it with a hash of the plan, which covers the package list. No code changes before that. With issue input, it offers to post the plan as an issue comment. |
 | 4. Implementation | Records the git base and blocks if your uncommitted changes overlap the planned files. Expands the approved package list into self-contained work packages. Their verification may only use test commands you confirmed. `lockin-implementer` implements them one by one. The main session verifies each result before the next package starts. |
-| 5. Review | The main session writes the diff and the redacted test output to `.lockin/<slug>/review/`. `lockin-reviewer-correctness` and `lockin-reviewer-risk` read these files and review the full change. Every finding gets fixed or rejected with a reason. The review files get deleted at the end of the phase. |
-| Wrap-up | Summary of implemented changes, open findings and test runs, plus a commit message, a PR description draft and the exact paths to stage. Deletes `.lockin/<slug>/` unless you passed `--keep`. No commit and no push unless you ask. |
+| 5. Review | The main session writes the diff and the redacted test output to `.lockin/<slug>/review/`. `lockin-reviewer-correctness` and `lockin-reviewer-risk` read these files and review the full change. Every finding gets fixed or rejected with a reason. The review files get deleted at the end of the phase. In lite mode the combined `lockin-reviewer` reviews instead. |
+| Wrap-up | Summary of implemented changes, open findings and test runs, plus a commit message, a PR description draft and the exact paths to stage. Deletes `.lockin/<slug>/` unless you passed `--keep`. No commit and no push unless you ask. Prints the run stats. With issue input, it offers a draft pull request once you committed and pushed. |
+
+The skill text lives in `SKILL.md` (Phases 1 to 3), `phase-4.md` and `phase-5.md`. Deterministic steps such as snapshots, diff collection, redaction and cleanup run as Python scripts in `skills/lockin/scripts/`.
+
+## Review skill
+
+`/lowkey:review` reviews a change that already exists. It never changes code and never comments on a pull request.
+
+| Argument | Reviewed diff |
+|---|---|
+| none | Commits of the current branch since the merge-base with the default branch. Uncommitted changes are not part of it. |
+| `<n>` or `#<n>` | Pull request via `gh pr diff` or merge request via `glab mr diff`. Needs the CLI, otherwise the skill stops. |
+| `<branch>` | Commits of the branch since the merge-base with the default branch. |
+| `<base>..<head>` | The diff between both refs. |
+
+The skill runs test commands only after your confirmation and only if the reviewed head is the checked-out `HEAD`. It redacts the test output, starts `lockin-reviewer-correctness` and `lockin-reviewer-risk` in parallel and reports the merged findings. The diff and test output live in `.lockin/review-<slug>/` during the review and get deleted at the end.
 
 ## State files
 
-The skill keeps its state in `.lockin/<slug>/` at the repository root: `state.md` (brief, baseline, challenge log, approval, package status, findings), `plan.md` with the work package list, one file per work package under `packages/` and, during the review only, the diff and test output under `review/`. This lets you continue a run after a context compaction or in a new session with `--resume`. A recorded approval is never enough on resume. The skill asks you again before it continues implementing.
+The skill keeps its state in `.lockin/<slug>/` at the repository root: `state.md` (brief, baseline, challenge log, approval, package status, findings), `plan.md` with the work package list, one file per work package under `packages/` and, during the review only, the diff and test output under `review/`. This lets you continue a run after a context compaction or in a new session with `--resume`. A recorded approval is never enough on resume. The skill asks you again before it continues implementing. `state.md` also records the mode and the run stats.
 
 The skill offers to add `.lockin/` to `.git/info/exclude`. It never edits your `.gitignore`. Do not commit `.lockin/`.
 
@@ -73,18 +92,19 @@ A finished run cleans up after itself. The skill deletes `review/` at the end of
 | `lockin-implementer` | Haiku, Sonnet per package | Read, Edit, Write, Bash, Grep, Glob | Exactly one work package, no architecture decisions |
 | `lockin-reviewer-correctness` | Sonnet | Read, Grep, Glob | Correctness, plan adherence, tests, `CLAUDE.md` conventions |
 | `lockin-reviewer-risk` | Sonnet | Read, Grep, Glob | Security, edge cases, performance, side effects |
+| `lockin-reviewer` | Sonnet | Read, Grep, Glob | Correctness and risk in one pass, lite mode only |
 
-The reviewers have no Bash access, so they cannot change the code under review or run commands with side effects. The main session runs `git diff` and the test commands and writes the complete diff and test output to files that both reviewers read.
+The three reviewers have no Bash access, so they cannot change the code under review or run commands with side effects. The main session runs `git diff` and the test commands and writes the complete diff and test output to files that both reviewers read.
 
 The implementer runs on Haiku by default. The main session switches to Sonnet for packages with logic across several files and for the second attempt on a failed package.
 
 ## Guard hook
 
-The plugin ships a `PreToolUse` hook that enforces the hard rules of the subagents instead of trusting the prompt alone. It only acts on the four lockin agents. Other agents and the main session pass through unchanged.
+The plugin ships a `PreToolUse` hook that enforces the hard rules of the subagents instead of trusting the prompt alone. It only acts on the five lockin agents. Other agents and the main session pass through unchanged.
 
 | Rule | Agents | Blocks |
 |---|---|---|
-| No secrets | all four | Read, Edit, Write, Grep, Glob and Bash on `.env`, `.env.*`, `.envrc`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `.netrc`, `.pgpass`, `.npmrc`, `.git-credentials`, `auth.json`, `credentials` and `credentials.<ext>` except Markdown, plus the globs from `.lockin-guard.json`. Names match case-insensitively. `.env.example`, `.env.dist` and `.env.sample` stay readable. Bash checks also catch quoted names like `.e""nv`, globs like `.en?` and `<rev>:<path>` like `git show HEAD:.env`. |
+| No secrets | all five | Read, Edit, Write, Grep, Glob and Bash on `.env`, `.env.*`, `.envrc`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `.netrc`, `.pgpass`, `.npmrc`, `.git-credentials`, `auth.json`, `credentials` and `credentials.<ext>` except Markdown, plus the globs from `.lockin-guard.json`. Names match case-insensitively. `.env.example`, `.env.dist` and `.env.sample` stay readable. Bash checks also catch quoted names like `.e""nv`, globs like `.en?` and `<rev>:<path>` like `git show HEAD:.env`. |
 | State stays untouched | implementer | Edit, Write and Bash on `.lockin/` and Edit and Write on `.lockin-guard.json`, in any letter case. Reading its own package file is allowed. |
 | Writes stay in the repo | implementer | Edit and Write outside the repository root and under `.git/`. Symlinks get resolved first. |
 | Allowlist | implementer | Every Bash command segment that is neither listed in `.lockin/active.json` nor strict read-only git. The main session writes the file before each delegation with the `Verification` commands of the package. Without the file only read-only git runs. A broken file blocks every Bash call. |
@@ -121,7 +141,7 @@ The file needs exactly the key `secret_globs` with a list of non-empty relative 
 
 ### Limits
 
-The hook needs `python3` and `sh`. It fails closed for the lockin agents. If `python3` is missing or the hook itself fails, the lockin agents get blocked with a message that names the cause. Bash commands longer than 16384 characters get blocked before the scan, so a slow check cannot run into the hook timeout. The guard matches command patterns, so it is a second line of defense and no sandbox. Known gaps:
+The hook and the scripts need `python3` 3.9 or newer, the hook also `sh`. It fails closed for the lockin agents. If `python3` is missing or the hook itself fails, the lockin agents get blocked with a message that names the cause. Bash commands longer than 16384 characters get blocked before the scan, so a slow check cannot run into the hook timeout. The guard matches command patterns, so it is a second line of defense and no sandbox. Known gaps:
 
 - Allowlisted commands run code from the working tree. A test the implementer wrote can copy files or start processes. The diff check in Phase 4 and the review in Phase 5 remain the real barrier.
 - Committed secret files stay readable through read-only git that does not name them, such as `git log -p`, `git show <commit>` or `git grep <pattern> <rev>`.
@@ -134,22 +154,28 @@ Native Windows without a POSIX shell is not supported, use WSL.
 ## Development
 
 ```text
-python3 -m unittest discover tests      # guard hook tests
+python3 -m unittest discover tests      # guard hook and script tests
 python3 scripts/check_metadata.py       # marketplace.json and plugin.json agree
 claude plugin validate . --strict       # marketplace manifest
 claude plugin validate plugins/lowkey --strict
 ```
 
-CI runs these checks on every push and pull request. The eval suite in `plugins/lowkey/evals/` runs locally only, before a release. Every case makes real model calls against your Claude login, so it counts against your plan usage. Install `bubblewrap` and `socat` first, because the cases grant Bash and need the sandbox. The `gate` tag holds the more expensive case `gates-before-changes`:
+CI runs the unit tests on Python 3.9 and 3.12, plus the metadata check and both validations, on every push and pull request. The eval suite in `plugins/lowkey/evals/` runs locally only, before a release. Every case makes real model calls against your Claude login, so it counts against your plan usage. Install `bubblewrap` and `socat` first, because the cases grant Bash and need the sandbox.
 
 ```text
 cd plugins/lowkey
 claude plugin eval . --tag smoke --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent --max-cost-usd 2
 ```
 
+The `gate` tag holds the more expensive cases `gates-before-changes` and `plan-approval-gate`. They start plugin agents, which the no-plugin baseline arm cannot run, so turn the baseline off:
+
+```text
+claude plugin eval . --tag gate --ablation none --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent --max-cost-usd 10
+```
+
 ## Cost
 
-This workflow uses noticeably more tokens than a regular session. The plan challenger runs on Opus for up to three rounds, and every run starts several subagents for implementation and review. Use it for tasks where a wrong plan or an unreviewed change costs more than the extra tokens, not for small fixes.
+This workflow uses noticeably more tokens than a regular session. The plan challenger runs on Opus for up to three rounds, and every run starts several subagents for implementation and review. Use it for tasks where a wrong plan or an unreviewed change costs more than the extra tokens, not for small fixes. `--lite` saves two Opus rounds and one Sonnet reviewer per review round. `/lowkey:review` costs two Sonnet reviewer runs per call.
 
 ## License
 

@@ -20,7 +20,7 @@ from pathlib import PurePath
 from typing import NamedTuple
 
 # Plugin subagents arrive namespaced, verified with Claude Code 2.1.322.
-AGENT_RE = re.compile(r"^lowkey:lockin-(?:implementer|plan-challenger|reviewer-correctness|reviewer-risk)$")
+AGENT_RE = re.compile(r"^lowkey:lockin-(?:implementer|plan-challenger|reviewer|reviewer-correctness|reviewer-risk)$")
 RAW_AGENT_RE = re.compile(r'"agent_type"\s*:\s*"lowkey:lockin-')
 
 IMPLEMENTER = "lowkey:lockin-implementer"

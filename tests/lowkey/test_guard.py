@@ -16,6 +16,7 @@ GUARD_SH = ROOT / "plugins" / "lowkey" / "hooks" / "guard.sh"
 
 IMPLEMENTER = "lowkey:lockin-implementer"
 REVIEWER = "lowkey:lockin-reviewer-risk"
+COMBINED = "lowkey:lockin-reviewer"
 
 
 def run_guard(payload: str, path_env: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -122,6 +123,25 @@ class ScopeTest(GuardTestCase):
 
     def test_namespaced_agent_name_is_recognized(self) -> None:
         self.assertBlocked(call("Read", {"file_path": "/repo/.env"}, agent=REVIEWER))
+
+
+class CombinedReviewerTest(GuardTestCase):
+    def test_secret_read_is_blocked(self) -> None:
+        self.assertBlocked(call("Read", {"file_path": "/repo/.env"}, agent=COMBINED), "secret file")
+
+    def test_secret_glob_is_blocked(self) -> None:
+        self.assertBlocked(call("Grep", {"pattern": "KEY", "glob": "**/.env*"}, agent=COMBINED), "glob")
+
+    def test_implementer_rules_do_not_apply(self) -> None:
+        self.assertAllowed(call("Bash", {"command": "git commit -m x"}, agent=COMBINED))
+
+    def test_regular_read_is_allowed(self) -> None:
+        self.assertAllowed(call("Read", {"file_path": "/repo/src/a.py"}, agent=COMBINED))
+
+    def test_similar_names_are_not_guarded(self) -> None:
+        for agent in ("lowkey:lockin-reviewer-x", "lowkey:lockin-reviewers"):
+            with self.subTest(agent=agent):
+                self.assertAllowed(call("Read", {"file_path": "/repo/.env"}, agent=agent))
 
 
 class SecretTest(GuardTestCase):
