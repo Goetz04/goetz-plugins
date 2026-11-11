@@ -2,6 +2,26 @@
 
 All notable changes to the lowkey plugin are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-11-11
+
+### Added
+
+- Bash allowlist for the implementer. The main session writes `.lockin/active.json` with the `Verification` commands before each delegation. The guard allows only these command segments plus strict read-only git. Without the file only read-only git runs, a broken file blocks every Bash call.
+- Project secrets in an optional `.lockin-guard.json` in the repository root (`secret_globs`). A broken file blocks the lockin agents. The implementer cannot edit the file.
+- Wrapper detection for `ddev`, `ddev exec`, `docker exec` and `docker compose exec`. Git, shell and install checks apply behind them. Unknown wrapper options block.
+- `.npmrc`, `.git-credentials` and `.envrc` count as secret files.
+
+### Changed
+
+- Name checks ignore case, so `.LOCKIN/`, `.GIT/` and `.ENV` no longer pass on case-insensitive filesystems.
+- Bash checks split `<rev>:<path>`, so `git show HEAD:.env` counts as secret access.
+- Read-only git blocks options that write files, run programs or read outside the repository (`--output`, `--ext-diff`, `--textconv`, `--no-index`, `--contents`, `--untracked`, `--no-exclude-standard`, `--recurse-submodules`, `-O`), also abbreviated. Global options follow an allowlist. git in a directory with a planted `.git` or `HEAD` below the repository root blocks.
+- Breaking: implementer Bash without `.lockin/active.json` allows only read-only git. A run resumed from 1.2 gets the file in step 4.2 before the next delegation.
+- Read-only git blocks paths outside the repository, because `git diff <path> <path>` then acts as `--no-index`.
+- Bash commands of lockin agents longer than 16384 characters get blocked, so the check cannot run into the hook timeout.
+- The implementer needs a working directory in the hook input for Bash.
+- SKILL.md writes and deletes `active.json` and documents the rules for `Verification` commands. The implementer edits files only with Edit and Write.
+
 ## [1.2.0] - 2026-11-10
 
 ### Added

@@ -84,14 +84,52 @@ The plugin ships a `PreToolUse` hook that enforces the hard rules of the subagen
 
 | Rule | Agents | Blocks |
 |---|---|---|
-| No secrets | all four | Read, Edit, Write, Grep, Glob and Bash on `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `.netrc`, `.pgpass`, `auth.json`, `credentials` and `credentials.<ext>` except Markdown. `.env.example`, `.env.dist` and `.env.sample` stay readable. Bash checks also catch quoted names like `.e""nv` and globs like `.en?`. |
-| State stays untouched | implementer | Edit, Write and Bash on `.lockin/`. Reading its own package file is allowed. |
+| No secrets | all four | Read, Edit, Write, Grep, Glob and Bash on `.env`, `.env.*`, `.envrc`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `.netrc`, `.pgpass`, `.npmrc`, `.git-credentials`, `auth.json`, `credentials` and `credentials.<ext>` except Markdown, plus the globs from `.lockin-guard.json`. Names match case-insensitively. `.env.example`, `.env.dist` and `.env.sample` stay readable. Bash checks also catch quoted names like `.e""nv`, globs like `.en?` and `<rev>:<path>` like `git show HEAD:.env`. |
+| State stays untouched | implementer | Edit, Write and Bash on `.lockin/` and Edit and Write on `.lockin-guard.json`, in any letter case. Reading its own package file is allowed. |
 | Writes stay in the repo | implementer | Edit and Write outside the repository root and under `.git/`. Symlinks get resolved first. |
+| Allowlist | implementer | Every Bash command segment that is neither listed in `.lockin/active.json` nor strict read-only git. The main session writes the file before each delegation with the `Verification` commands of the package. Without the file only read-only git runs. A broken file blocks every Bash call. |
 | No nested shells | implementer | `sh`, `bash`, `zsh`, `dash`, `ksh` and `fish` with `-c`, plus `eval`. Running a script file stays allowed. |
-| Read-only git | implementer | Every git subcommand except `diff`, `status`, `log`, `show`, `ls-files`, `rev-parse`, `blame` and `grep` |
+| Read-only git | implementer | Every git subcommand except `diff`, `status`, `log`, `show`, `ls-files`, `rev-parse`, `blame` and `grep`. Options that write, run programs or read outside the repository: `--output`, `--ext-diff`, `--textconv`, `--no-index`, `--contents`, `--untracked`, `--no-exclude-standard`, `--recurse-submodules` and `-O`, also abbreviated. Global options except `-C` inside the repository, `-c core.quotePath`, `-c color.ui`, `--no-pager`, `-P`, `--literal-pathspecs` and `--no-optional-locks`. Paths outside the repository, because `git diff <path> <path>` then acts as `--no-index`. The guard also blocks git in a directory that holds a planted `.git` or `HEAD` below the repository root. |
 | No installs | implementer | Install, update and remove commands of `npm`, `pnpm`, `yarn`, `bun`, `composer`, `pip`, `pipx`, `uv`, `poetry`, `cargo`, `gem`, `bundle`, `go`, `conda`, `mamba`, `apt`, `dnf`, `yum`, `apk` and `brew`, also behind global options. `npx`, `npm exec` and `bunx` only with `--yes` or `--package`, plus `pnpm dlx` and `yarn dlx`. |
+| Wrappers | implementer | The git, shell and install checks also apply behind `sudo`, `env`, `ddev`, `ddev exec`, `docker exec <container>`, `docker compose exec <service>` and `docker-compose exec <service>`. Unknown options of these wrappers block, because the guard cannot locate the command. |
 
-The hook needs `python3` and `sh`. It fails closed for the lockin agents. If `python3` is missing or the hook itself fails, the lockin agents get blocked with a message that names the cause. The guard matches command patterns, so it is a second line of defense and no sandbox. Known gaps: Bash commands can still write outside the repository, a script file or `python -c` can run anything, brace expansion like `.{e,x}nv` hides a secret name, and `npx` without `--yes` may fetch a missing package. The diff check in the main session and the review phase cover what the guard misses. Native Windows without a POSIX shell is not supported, use WSL.
+### Allowlist rules
+
+The guard splits a Bash command at `&&`, `||`, `;`, `|`, `&`, newlines, parentheses and command substitutions. Each segment must match a segment of an `active.json` entry, compared after shell-style tokenizing and with the same unquoted shell characters (`$`, backtick, `*`, `?`, `[`, `{`, `>`, `<`, leading `~`). Otherwise it must be strict read-only git: it starts with `git` itself and contains none of these characters unquoted. Write `Verification` commands as plain command lines:
+
+- No `;`, `|`, `&` or parentheses inside quotes. Write `ddev exec vendor/bin/phpunit && ddev exec vendor/bin/phpstan` instead of `ddev exec "vendor/bin/phpunit && vendor/bin/phpstan"`.
+- No git after `cd` in the same command line.
+- Quote globs in git pathspecs: `git diff -- '*.py'`.
+
+Allowed commands still pass all other checks, so an allowlisted `ddev exec composer require x` stays blocked. `active.json` lives at `.lockin/active.json`, outside the run folder, so run one lockin workflow per repository at a time.
+
+### Project secrets
+
+Add a `.lockin-guard.json` to the repository root to protect project-specific files:
+
+```json
+{
+  "secret_globs": [
+    "config/system/additional.php",
+    "typo3conf/LocalConfiguration.php",
+    "config/secrets/"
+  ]
+}
+```
+
+The file needs exactly the key `secret_globs` with a list of non-empty relative globs. A missing file means only the fixed list applies. A broken file blocks every call of the lockin agents until you fix it. Globs match the path relative to the repository root with `fnmatch`, so `*` also matches `/`. A glob without `/` matches the file name anywhere. A trailing `/` covers the whole directory, and a leading `**/` matches at any depth, including the root. Matching ignores case. The guard checks the path as written and the resolved path, so a symlinked secret stays protected.
+
+### Limits
+
+The hook needs `python3` and `sh`. It fails closed for the lockin agents. If `python3` is missing or the hook itself fails, the lockin agents get blocked with a message that names the cause. Bash commands longer than 16384 characters get blocked before the scan, so a slow check cannot run into the hook timeout. The guard matches command patterns, so it is a second line of defense and no sandbox. Known gaps:
+
+- Allowlisted commands run code from the working tree. A test the implementer wrote can copy files or start processes. The diff check in Phase 4 and the review in Phase 5 remain the real barrier.
+- Committed secret files stay readable through read-only git that does not name them, such as `git log -p`, `git show <commit>` or `git grep <pattern> <rev>`.
+- Project globs with a wildcard in the file name miss `cd <dir> && cat <file>`. Brace expansion like `.{e,x}nv` hides a secret name.
+- The wrapper detection covers `ddev` and `docker exec` or `docker compose exec`, not `docker run`, `docker compose run`, `podman`, `kubectl exec` or `ddev ssh`. The allowlist still blocks them unless they are listed.
+- `npx` without `--yes` may fetch a missing package when it is allowlisted.
+
+Native Windows without a POSIX shell is not supported, use WSL.
 
 ## Development
 

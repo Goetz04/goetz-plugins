@@ -32,6 +32,7 @@ The workflow keeps its state in `<repo>/.lockin/<slug>/`, where `<repo>` is the 
 | `plan.md` | The plan text, including the work package list |
 | `packages/<n>.md` | The full text of work package `<n>` |
 | `review/` | Diff, new file list and test output for the current review round. Transient, see 5.1 |
+| `../active.json` | `<repo>/.lockin/active.json`, outside the run folder: the Bash allowlist of the package that runs right now. One per repository, so run one lockin workflow per repository at a time. See 4.2 |
 
 - Only the main session writes these files. Update `state.md` at the end of every phase, before you delegate a work package and after you verified it.
 - `current_phase` is `1` to `5`, `wrap-up` or `done`. Each package in `state.md` has number, title, model and status: `pending`, `in_progress`, `done`, `failed` or `blocked`.
@@ -78,7 +79,7 @@ Then check whether the task asks for a change. If it only asks for analysis, exp
 
 ### 1.2 Read the project context
 
-- Never read `.env` files, credential files or private keys. This rule binds you and every subagent.
+- Never read `.env` files, credential files or private keys. This rule binds you and every subagent. If the repository root holds a `.lockin-guard.json`, the files matching its `secret_globs` count as secret files too.
 - Read the project `CLAUDE.md` (root and any nested ones in affected directories). Its conventions bind every later phase, including the subagents, so extract the rules that matter for this task.
 - Locate and read all files the task affects. Read callers and tests of the code you plan to change, not only the code itself. Changes break at the boundaries.
 - Identify how the project runs tests, linters and static analysis. You need these commands for the baseline and the work packages.
@@ -201,7 +202,7 @@ typing, error handling, test structure.>
 - <Verifiable criterion>
 
 ### Verification
-`<exact command, e.g. vendor/bin/phpunit tests/Unit/FooTest.php>`
+`<exact command, e.g. vendor/bin/phpunit tests/Unit/FooTest.php>`, one command line per line
 or: No automated tests. Manual check: <exact steps>
 
 ### Out of scope
@@ -212,6 +213,8 @@ Pre-existing user changes, never modify: <paths or "none">
 If a package needs a decision you have not made, make it now and write it into the package. The implementer is not allowed to make architecture decisions.
 
 The `Verification` field may only contain commands that the user confirmed in 1.3 or approved with the plan. The implementer runs these commands with Bash, so an unconfirmed command there bypasses the confirmation. If a package needs a new command, ask the user first and record the confirmation in `state.md`.
+
+Write every `Verification` command as the exact command line the implementer runs. The guard compares each segment between `&&`, `||`, `;`, `|` and `&` with the allowlist, after shell-style tokenizing. Do not put `;`, `|`, `&` or parentheses inside quotes, because the guard blocks such commands. Write `ddev exec vendor/bin/phpunit && ddev exec vendor/bin/phpstan`, not `ddev exec "vendor/bin/phpunit && vendor/bin/phpstan"`. Do not combine `cd` and git in one command line.
 
 Pick the model per package. The default is Haiku from the agent definition. Pass `model: "sonnet"` to the Agent tool when a package changes logic across more than one file or needs non-trivial algorithms or type reasoning. Do not use Opus for implementation.
 
@@ -227,7 +230,7 @@ Before the first package:
 
 For each package:
 
-1. Set its status to `in_progress` in `state.md`. Then delegate it to `lowkey:lockin-implementer` with the chosen model. The prompt names the absolute path of `.lockin/<slug>/packages/<n>.md` and tells the implementer to read it first. Do not repeat the package text in the prompt. Add only what the file lacks, such as the answer to an earlier `BLOCKED` question.
+1. Set its status to `in_progress` in `state.md`. Write `<repo>/.lockin/active.json` as `{"slug": "<slug>", "package": <n>, "commands": [<each Verification command verbatim>]}`, with `"commands": []` for manual checks. Rewrite it before every delegation, including retries (step 4) and after a newly confirmed command (step 5), together with `packages/<n>.md`. The guard allows the implementer with Bash only these commands plus read-only git. Without the file it allows only read-only git, and a broken file blocks every Bash call of the implementer. Then delegate it to `lowkey:lockin-implementer` with the chosen model. The prompt names the absolute path of `.lockin/<slug>/packages/<n>.md` and tells the implementer to read it first. Do not repeat the package text in the prompt. Add only what the file lacks, such as the answer to an earlier `BLOCKED` question.
 2. Check the result before you start the next package:
    - Read the report.
    - Inspect the actual change with `git diff <base>` on the affected files. Trust the diff, not the report.
@@ -236,9 +239,11 @@ For each package:
 3. If the result is correct, set the status to `done`.
 4. If the result is wrong or incomplete, write a corrected package to `packages/<n>.md` that names the concrete problem and delegate again. Attempt 1 runs on the planned model, attempt 2 on Sonnet. After that, implement it yourself or ask the user. Set the status to `failed` if the user stops the package.
 5. If the implementer reports `BLOCKED`, set the status to `blocked` and resolve the question. Ask the user when the answer changes scope or architecture. Then update `packages/<n>.md` and delegate again.
-6. If the report or a tool error contains `lowkey guard:`, the plugin's guard hook blocked a call. Treat it like `BLOCKED`. Show the user the blocked call and the reason. Never rephrase the command to get past the guard, and never tell the implementer to do so. If the package truly needs the call, the user decides, and you run it yourself after their approval.
+6. If the report or a tool error contains `lowkey guard:`, the plugin's guard hook blocked a call. Treat it like `BLOCKED`. Show the user the blocked call and the reason. Never rephrase the command to get past the guard, and never tell the implementer to do so. If the package truly needs the call, the user decides, and you run it yourself after their approval. The guard also blocks every command outside `active.json` and read-only git. Add a command to the package only after the user confirmed it, then rewrite `active.json`.
 
 Run packages sequentially. Later packages build on earlier ones, and a defect caught early is cheaper than a defect spread across three packages.
+
+After the last package, and whenever the user stops a package or the run, delete `<repo>/.lockin/active.json`. A stale allowlist must not apply to a later run.
 
 If you discover during implementation that the approved plan does not work, stop. Explain the problem to the user and get approval for the changed plan before you continue. Then update `plan.md` and write the new approval with the new hash to `state.md`.
 
@@ -275,7 +280,7 @@ Delegate to `lowkey:lockin-reviewer-correctness` and `lowkey:lockin-reviewer-ris
 
 Handle every finding:
 
-- **Fix**: implement the fix directly or as a new work package through `lowkey:lockin-implementer`. Verify it like any other package.
+- **Fix**: implement the fix directly or as a new work package through `lowkey:lockin-implementer`. Verify it like any other package. Write `active.json` before the delegation as in 4.2 and delete it after the verification.
 - **Reject**: write down a concrete reason.
 
 Do not drop findings silently. A rejected finding with a reason helps the user, a missing finding hides a risk. Record every finding with your decision in `state.md`.
@@ -296,6 +301,7 @@ Set `current_phase` to `wrap-up` in `state.md`. Then give the user a final summa
 
 Set `current_phase` to `done` in `state.md`. Then clean up:
 
+- Delete `<repo>/.lockin/active.json` if it still exists, also when `keep_state` is `true`.
 - If `keep_state` is `true`, keep `.lockin/<slug>/` and tell the user that they may delete it.
 - Otherwise delete the run folder. Check first that the complete summary above stands in the chat, that the slug is not empty and contains neither `/` nor `..`, and that the target is exactly `<repo>/.lockin/<slug>`. Then run `rm -rf -- "<repo>/.lockin/<slug>"`. If `.lockin/` is empty afterwards, remove it with `rmdir`. Tell the user that the state is gone, because `.lockin/` is not versioned and the delete cannot be undone.
 - If the delete fails, report the error and the path. Do not retry with other commands.
