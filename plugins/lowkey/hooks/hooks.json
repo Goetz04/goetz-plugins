@@ -1,5 +1,5 @@
 {
-  "description": "Guard for the lockin subagents: blocks secret files, writes outside the repository or to .lockin/ and .git/, git writes, nested shells and package installs. Other agents and the main session pass through.",
+  "description": "Guard for the lockin subagents: blocks secret files including project globs from .lockin-guard.json, writes outside the repository or to .lockin/ and .git/, Bash commands outside the allowlist in .lockin/active.json, git writes and risky git options, nested shells and package installs, also behind ddev and docker wrappers. Other agents and the main session pass through.",
   "hooks": {
     "PreToolUse": [
       {
