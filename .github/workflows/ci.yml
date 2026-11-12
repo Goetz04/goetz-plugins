@@ -10,14 +10,17 @@ permissions:
 
 jobs:
   checks:
-    name: Guard tests and metadata
+    name: Tests and metadata (Python ${{ matrix.python-version }})
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Guard hook tests
+          python-version: ${{ matrix.python-version }}
+      - name: Guard and script tests
         run: python -m unittest discover tests -v
       - name: Metadata consistency
         run: python scripts/check_metadata.py

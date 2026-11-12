@@ -1,0 +1,47 @@
+schema_version: "1.1"
+name: plan-approval-gate
+description: With pre-confirmed test commands the run reaches the approval gate, challenges the plan and stops before any implementation.
+tags: [gate]
+runs: 1
+context:
+  scaffold_script: scaffold.sh
+graders:
+  # The trace is JSON with escaped quotes, so each quote may follow a backslash.
+  # Matching the subagent_type field works for both tool names, Agent and Task.
+  - name: challenger-ran
+    type: regex
+    target: trace
+    pattern: 'subagent_type\\?"\s*:\s*\\?"lowkey:lockin-plan-challenger'
+    match: contains
+  - name: no-implementer-or-reviewer
+    type: regex
+    target: trace
+    pattern: 'subagent_type\\?"\s*:\s*\\?"lowkey:lockin-(implementer|reviewer)'
+    match: not_contains
+  # Writes under .lockin/ are allowed, writes to src/ and tests/ are not.
+  - name: no-src-test-edits
+    type: tool_used
+    tool: Edit
+    input_match: '"file_path"\s*:\s*"(?![^"]*\.lockin/)(?:[^"]*/)?(src|tests)/'
+    min: 0
+    max: 0
+  - name: no-src-test-writes
+    type: tool_used
+    tool: Write
+    input_match: '"file_path"\s*:\s*"(?![^"]*\.lockin/)(?:[^"]*/)?(src|tests)/'
+    min: 0
+    max: 0
+  - name: src-unchanged
+    type: regex
+    target:
+      source: file
+      path: src/price.py
+    pattern: 'ValueError'
+    match: not_contains
+  - name: tests-unchanged
+    type: regex
+    target:
+      source: file
+      path: tests/test_price.py
+    pattern: 'ValueError'
+    match: not_contains

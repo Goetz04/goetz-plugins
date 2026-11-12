@@ -1,7 +1,7 @@
 {
   "name": "lowkey",
-  "version": "1.3.0",
-  "description": "Lock in on big, important tasks: understand, plan, challenge, get approval, implement in isolated work packages and review with dedicated subagents.",
+  "version": "1.4.0",
+  "description": "Lock in on big, important tasks: understand, plan, challenge, get approval, implement in isolated work packages and review with dedicated subagents. Also reviews branches and pull requests on demand.",
   "author": {
     "name": "Goetz",
     "url": "https://github.com/Goetz04"
@@ -9,5 +9,5 @@
   "homepage": "https://github.com/Goetz04/goetz-plugins",
   "repository": "https://github.com/Goetz04/goetz-plugins",
   "license": "MIT",
-  "keywords": ["workflow", "planning", "code-review", "subagents", "implementation"]
+  "keywords": ["workflow", "planning", "code-review", "subagents", "implementation", "review"]
 }
