@@ -6,7 +6,7 @@ A Claude Code plugin marketplace by [Goetz](https://github.com/Goetz04).
 
 ### lowkey
 
-Lock in on big, important tasks. The `lockin` skill runs a gated workflow: understand the task, write a plan and let an independent subagent challenge it, wait for your approval, implement in small self-contained work packages and review the full diff with two dedicated reviewers. The `review` skill reviews an existing branch or pull request with the same reviewers, without changing code.
+Lock in on big, important tasks. The `lockin` skill runs a gated workflow: understand the task, write a plan and let an independent subagent challenge it, wait for your approval, implement in small self-contained work packages and review the full diff with two dedicated reviewers. The `review` skill reviews an existing branch or pull request with the same reviewers, without changing code. The `typo3-upgrade` skill plans a TYPO3 major upgrade and hands each step to `lockin`.
 
 ## Installation
 
@@ -32,6 +32,8 @@ Every release bumps the version in `plugin.json`. See the [changelog](plugins/lo
 /lowkey:lockin [--keep] [--lite] <issue-number or task>
 /lowkey:lockin --resume [slug] [--keep]
 /lowkey:review [pr-number | branch | <base>..<head>]
+/lowkey:typo3-upgrade [--to 12|13|14] [--lite]
+/lowkey:typo3-upgrade --resume | --step <n>
 ```
 
 Examples:
@@ -42,6 +44,7 @@ Examples:
 /lowkey:lockin --keep "Migrate the session store to Redis"
 /lowkey:lockin --lite "Add a CSV export to the report page"
 /lowkey:lockin --resume 2026-11-10-rate-limiting
+/lowkey:typo3-upgrade --to 13
 ```
 
 With an issue number, the skill reads the issue through `gh` (GitHub) or `glab` (GitLab) if available. Otherwise it treats the argument as the task description. If the task only asks for an analysis, the skill delivers the analysis and asks whether to continue with a change. The skill requires a git repository.
@@ -75,6 +78,36 @@ The skill text lives in `SKILL.md` (Phases 1 to 3), `phase-4.md` and `phase-5.md
 | `<base>..<head>` | The diff between both refs. |
 
 The skill runs test commands only after your confirmation and only if the reviewed head is the checked-out `HEAD`. It redacts the test output, starts `lockin-reviewer-correctness` and `lockin-reviewer-risk` in parallel and reports the merged findings. The diff and test output live in `.lockin/review-<slug>/` during the review and get deleted at the end.
+
+## TYPO3 upgrade skill
+
+`/lowkey:typo3-upgrade` plans a Composer-based TYPO3 major upgrade. It orchestrates `lockin`: it writes the roadmap and hands each step to `lockin`, which implements and reviews it. The skill never changes project code, the database or Composer itself.
+
+The skill accepts 11.5, 12.4 and 13.4 as source and 12, 13 or 14 as target. It refuses other sources. It runs one rung at a time and never skips a major version. Local intermediate versions never go live.
+
+| Phase | What happens |
+|---|---|
+| Version gate | Reads `typo3/cms-core` from `composer.lock`. Refuses unsupported sources and invalid targets. Writes nothing. |
+| MCP check | Looks for TYPO3/dev-companion. Stops once if it is missing and offers to install it or continue without it. |
+| Preflight | Inventories extensions, blockers and logs read-only. Asks before each command with side effects or network access. |
+| Roadmap | Writes the roadmap and one step brief per step. Waits for your explicit approval. |
+| Handoff | Prints the `lockin` command for the next step. You run it. |
+| Resume | After a `lockin` run, `--resume` records the outcome and proposes the next step. `--step <n>` repeats a handoff. |
+
+The skill uses two folders. Both must be ignored by git, so add them to `.git/info/exclude`.
+
+- `.lockin/upgrade/` holds the state, frozen copies of the references and the tools.
+- `.typo3-upgrade/` in the DDEV app root holds the tools and the evidence.
+
+The evidence never holds SQL dumps, because user tables contain personal data. Use DDEV snapshots for database state. Archive both folders at each rung exit, because `git clean -fdX` or a fresh clone deletes them.
+
+The skill prints the handoff command for the next step, for example `/lowkey:lockin --keep Implement the step brief in .lockin/upgrade/steps/<nn>-<slug>.md`. Add `--lite` when the step uses lite mode. You run the command yourself, because `lockin` sets `disable-model-invocation`, so the skill cannot start it. Run `/lowkey:typo3-upgrade --resume` after `lockin` finishes.
+
+Check commands are idempotent and may go into the `Verification` of a step. Commands that write the database, a snapshot or a baseline run in the main session of `lockin`, after your approval. See [`process.md`](plugins/lowkey/skills/typo3-upgrade/references/process.md) for the full rules.
+
+The skill recommends the MCP server [TYPO3/dev-companion](https://github.com/TYPO3/dev-companion). Without it, the skill marks unconfirmed facts as `unverified`. The install writes `.mcp.json` and `.agents/skills` into the project.
+
+The item format of the fix packs and the idea of per-object approval for destructive schema changes come from [dirnbauer/typo3-skills](https://github.com/dirnbauer/typo3-skills). All text in this plugin is original.
 
 ## State files
 
@@ -164,18 +197,18 @@ CI runs the unit tests on Python 3.9 and 3.12, plus the metadata check and both 
 
 ```text
 cd plugins/lowkey
-claude plugin eval . --tag smoke --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent --max-cost-usd 2
+claude plugin eval . --tag smoke --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent "Bash(cp:*)" "Bash(mkdir:*)" --max-cost-usd 2
 ```
 
-The `gate` tag holds the more expensive cases `gates-before-changes` and `plan-approval-gate`. They start plugin agents, which the no-plugin baseline arm cannot run, so turn the baseline off:
+The `typo3-upgrade` cases copy files with `cp` and `mkdir`, which the eval sandbox denies unless the two `Bash(...)` grants allow them. The `gate` tag holds the more expensive cases `gates-before-changes`, `plan-approval-gate` and `upgrade-roadmap-gate`. The first two start plugin agents, which the no-plugin baseline arm cannot run, so turn the baseline off:
 
 ```text
-claude plugin eval . --tag gate --ablation none --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent --max-cost-usd 10
+claude plugin eval . --tag gate --ablation none --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent "Bash(cp:*)" "Bash(mkdir:*)" --max-cost-usd 10
 ```
 
 ## Cost
 
-This workflow uses noticeably more tokens than a regular session. The plan challenger runs on Opus for up to three rounds, and every run starts several subagents for implementation and review. Use it for tasks where a wrong plan or an unreviewed change costs more than the extra tokens, not for small fixes. `--lite` saves two Opus rounds and one Sonnet reviewer per review round. `/lowkey:review` costs two Sonnet reviewer runs per call.
+This workflow uses noticeably more tokens than a regular session. The plan challenger runs on Opus for up to three rounds, and every run starts several subagents for implementation and review. Use it for tasks where a wrong plan or an unreviewed change costs more than the extra tokens, not for small fixes. `--lite` saves two Opus rounds and one Sonnet reviewer per review round. `/lowkey:review` costs two Sonnet reviewer runs per call. `/lowkey:typo3-upgrade` itself runs no subagents. Every step costs one lockin run.
 
 ## License
 

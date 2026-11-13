@@ -2,6 +2,27 @@
 
 All notable changes to the lowkey plugin are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-11-13
+
+### Added
+
+- New skill `/lowkey:typo3-upgrade` for Composer-based TYPO3 major upgrades from 11.5, 12.4 or 13.4 to 12, 13 or 14, one rung at a time. It refuses older or non-LTS sources, inventories the project read-only, writes a roadmap and one step brief per step into `.lockin/upgrade/`, waits for approval and prints the lockin command for each step. It never changes code, the database or Composer itself. `--resume` records the outcome (`pass`, `findings`, `blocked`) and proposes the next step, `--step <n>` repeats a handoff.
+- References for process and command classes, roadmap template, database, Composer, schema and wizards, verification, the rungs 11 to 12, 12 to 13 and 13 to 14, and the migrations Gridelements to container and Mask to Content Blocks. All 13 to 14 items are marked unverified.
+- Scripts `crawl.sh`, `htmldiff.sh`, `residual.py`, `tree_hash.py`, `ts-dump.php` and `extension-scanner.php`, generalized from a real upgrade project, with tests in `tests/lowkey/test_typo3_upgrade.py`.
+- Evals `upgrade-refuses-v10` and `upgrade-preflight-readonly` (smoke) and `upgrade-roadmap-gate` (gate).
+
+### Changed
+
+- `.gitattributes` keeps LF line endings for `*.php` too.
+
+### Notes
+
+- The skill recommends the MCP server TYPO3/dev-companion and stops once if it is missing. It works without it and then marks unconfirmed facts as unverified.
+- Step briefs carry a command contract for lockin: only idempotent checks go into `Verification`, every command that writes the database, a snapshot or a baseline runs in lockin's main session after approval.
+- The PHP scripts passed `php -l` only. They ran on TYPO3 12 and 13 in the source project, not in this repository.
+- The three new evals pass in a local run. The `typo3-upgrade` cases need the extra grants `"Bash(cp:*)"` and `"Bash(mkdir:*)"`, see the README.
+- `residual.py` pins the compared pages with `--pages` and `--pages-sha256`, and snapshot names carry an attempt number, so a rerun never overwrites the clean restore point.
+
 ## [1.4.0] - 2026-11-11
 
 ### Added

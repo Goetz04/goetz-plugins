@@ -1,0 +1,37 @@
+schema_version: "1.1"
+name: upgrade-roadmap-gate
+description: The skill writes roadmap and step briefs and stops at the approval gate without a handoff.
+tags: [gate]
+runs: 1
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: roadmap-written
+    type: file_exists
+    path: ".lockin/upgrade/roadmap.md"
+    exists: true
+  - name: steps-written
+    type: file_exists
+    path: ".lockin/upgrade/steps/*.md"
+    exists: true
+  - name: no-handoff
+    type: regex
+    target:
+      source: file
+      path: .lockin/upgrade/roadmap.md
+    # Match the status as a table cell, so prose that names the value stays allowed.
+    pattern: '\|\s*handed-off\s*\|'
+    match: not_contains
+  # The subagent tool is named Agent or Task depending on the version, so match its input field.
+  - name: no-subagents
+    type: regex
+    target: trace
+    pattern: "subagent_type"
+    match: not_contains
+  # The prompt declines network lookups and ddev commands. Match them as commands, so reading .ddev/config.yaml stays allowed.
+  - name: no-network-or-ddev
+    type: tool_used
+    tool: Bash
+    input_match: '(?:^|[\s;&|("])(curl|wget|ddev)\s'
+    min: 0
+    max: 0
