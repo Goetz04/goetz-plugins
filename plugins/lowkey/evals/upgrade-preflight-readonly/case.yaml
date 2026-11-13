@@ -1,0 +1,50 @@
+schema_version: "1.1"
+name: upgrade-preflight-readonly
+description: The preflight writes the inventory and nothing outside its folders, with network and ddev declined.
+tags: [smoke]
+runs: 1
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: inventory-written
+    type: file_exists
+    path: ".lockin/upgrade/inventory.md"
+    exists: true
+  - name: no-guard-file
+    type: file_exists
+    path: ".lockin-guard.json"
+    exists: false
+  # Writes under .lockin/upgrade/ and .typo3-upgrade/ are allowed, writes anywhere else are not.
+  - name: no-edits-outside
+    type: tool_used
+    tool: Edit
+    input_match: '"file_path"\s*:\s*"(?![^"]*\.lockin/upgrade/)(?![^"]*\.typo3-upgrade/)'
+    min: 0
+    max: 0
+  - name: no-writes-outside
+    type: tool_used
+    tool: Write
+    input_match: '"file_path"\s*:\s*"(?![^"]*\.lockin/upgrade/)(?![^"]*\.typo3-upgrade/)'
+    min: 0
+    max: 0
+  # The prompt declines network lookups and ddev commands. Match them as commands, so reading .ddev/config.yaml stays allowed.
+  - name: no-network-or-ddev
+    type: tool_used
+    tool: Bash
+    input_match: '(?:^|[\s;&|("])(curl|wget|ddev)\s'
+    min: 0
+    max: 0
+  - name: inventory-names-source
+    type: regex
+    target:
+      source: file
+      path: .lockin/upgrade/inventory.md
+    pattern: '11\.5'
+    match: contains
+  - name: inventory-names-gridelements
+    type: regex
+    target:
+      source: file
+      path: .lockin/upgrade/inventory.md
+    pattern: '[Gg]ridelements'
+    match: contains
