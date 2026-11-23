@@ -1,7 +1,7 @@
 ---
 name: typo3-upgrade
-description: Plan a Composer-based TYPO3 major upgrade from 11.5, 12.4 or 13.4 to 12, 13 or 14, one rung at a time. Inventories the project read-only, writes a roadmap and one step brief per step, waits for approval and hands each step to /lowkey:lockin. Never changes project code, the database or Composer itself.
-argument-hint: "[--to 12|13|14] [--lite] | --resume | --step <n>"
+description: Plan a Composer-based TYPO3 major upgrade from 10.4, 11.5, 12.4 or 13.4 to 11, 12, 13 or 14, one rung at a time. Inventories the project read-only, writes a roadmap and one step brief per step, waits for approval and hands each step to /lowkey:lockin. Never changes project code, the database or Composer itself.
+argument-hint: "[--to 11|12|13|14] [--lite] | --resume | --step <n>"
 disable-model-invocation: true
 ---
 
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
-This skill plans a Composer-based TYPO3 major upgrade, one rung at a time (11 to 12, 12 to 13, 13 to 14). It inventories the project read-only, writes a roadmap and one step brief per step, waits for your approval and hands each step to `/lowkey:lockin`.
+This skill plans a Composer-based TYPO3 major upgrade, one rung at a time (10 to 11, 11 to 12, 12 to 13, 13 to 14). It inventories the project read-only, writes a roadmap and one step brief per step, waits for your approval and hands each step to `/lowkey:lockin`.
 
 The skill never changes project code, never writes to the database and never runs Composer. All changes run through lockin.
 
@@ -50,7 +50,7 @@ Run scripts with `python3` or `bash`. Quote every path. Pass values from outside
 Parse `$ARGUMENTS`.
 
 - `--resume` or `--step <n>` (a positive integer). Read `resume.md` in the same directory as this file and follow it. These flags combine with no other flag.
-- `--to 12|13|14` and `--lite`, in any order.
+- `--to 11|12|13|14` and `--lite`, in any order.
 - Any other token that starts with `--`, or an invalid value. Show the argument hint and stop.
 
 Free text after the flags counts as answers given in advance to the questions of this skill, for example "continue without the MCP" or "decline all network and ddev commands". Apply each answer when its question comes and say that you applied it.
@@ -65,11 +65,12 @@ Write nothing and ask nothing before the refusal check. One exception applies. A
 
 1. Run `git rev-parse --show-toplevel`. If it fails, say that the skill needs a git repository and stop.
 2. Determine `<composer-root>` as in `## Paths`.
-3. Read `typo3/cms-core` from `<composer-root>/composer.lock`. Search `packages` and `packages-dev`. Strip a leading `v` from the version.
-4. Refuse and stop with a short note, and write no file, in these cases.
+3. Read `typo3/cms-core` from `<composer-root>/composer.lock`. Search `packages` and `packages-dev`. Strip a leading `v` from the version. Compare only major and minor, so a suffix after them does not change the result. A dev version with a numeric major and minor, for example `10.4.x-dev`, passes. The inventory then marks its patch level `unchecked`.
+4. Refuse and stop with a short note, and write no file, in these cases. The note names the installed version and the supported sources. Do not read further files and do not analyze the project.
    - `composer.lock` or `typo3/cms-core` is missing. The skill needs Composer mode.
-   - The version is below 11.5.
-   - The source is not an LTS line. Supported sources are 11.5, 12.4 and 13.4. For 12.1, say to update to 12.4 first.
+   - Major and minor of the version are not numeric, for example `dev-main` or `dev-10.4`.
+   - The version is below 10.4. For 10.0 to 10.3, say to update to 10.4 first.
+   - The source is not an LTS line. Supported sources are 10.4, 11.5, 12.4 and 13.4. For 12.1, say to update to 12.4 first.
    - `--to` is not above the source major, or above 14.
 5. Without `--to`, propose 14. The user confirms the target with the roadmap.
 6. If `<state>/roadmap.md` exists, say that a roadmap exists, point to `--resume` and `--step <n>` and stop. Never overwrite it. To start fresh, the user moves the folder. Also stop when `<state>/steps/`, `<state>/references/` or `<state>/tools/` exists without `roadmap.md`. That is a partial earlier run. Tell the user to move or delete `<state>` and start again.
@@ -85,7 +86,7 @@ If not, stop once and show the install hint from `## MCP` in `process.md`. The h
 - Run `bin/typo3-dev-companion install` in the project root, then restart the session.
 - `install` writes the `typo3-dev-companion` entry into `.mcp.json` and skills into `.agents/skills`. The option `--agent=<id>` selects other skill locations (unverified).
 - Commit these files on purpose, or add `.mcp.json` and `.agents/` to `info/exclude`.
-- The MCP covers 12.4, 13.4 and 14.3, not 11.5.
+- The MCP covers 12.4, 13.4 and 14.3, not 10.4 or 11.5.
 
 Ask whether to install first or continue without.
 - Install first. Stop. The user runs the skill again after the restart.
@@ -105,14 +106,14 @@ The preflight is read-only, except for `<state>`, `<work>` and the two files tha
    - the source class. `public` when `notification-url` is `https://packagist.org/downloads/`. Otherwise `path`, `vcs` or `private`, taken from `dist` and `source`.
    - the raw `typo3/cms-core` constraint
 
-   Blockers are Gridelements, Mask, content_defender, typo3-console without a release for a rung, extensions without a release for a target major, captcha extensions without a release (forms) and extensions in the web dir without Composer.
+   Blockers are Gridelements, Mask, content_defender, typo3-console without a release for a rung, extensions without a release for a target major, captcha extensions without a release (forms) and extensions in the web dir without Composer. Judge each blocker per rung, for the installed version. An extension is no blocker when a release covers every rung of the run. A lookup proves such a release. The raw `typo3/cms-core` constraint of the installed version proves it only when it names the major of each rung explicitly, for example `^10.4 || ^11.5`. A constraint without upper bound such as `*` or `>=10.4`, or a missing constraint, proves nothing. A proof sets the availability of the covered majors to `yes`. Then write "no blocker for this run" in the note column of the extension table. An extension with `unchecked` availability stays a blocker candidate and goes into the list of `unchecked` items.
 4. Logs. Summarize `var/log/typo3_*.log` and the deprecation logs with counts, top messages and origin extension. Never copy raw lines.
 5. Secrets. Check which of the four config files git tracks. Make the `.lockin-guard.json` proposal from `## Secrets` in `process.md`. Write the file only after a yes, merge with existing globs and validate the result.
 6. Command confirmation. List the commands with side effects or network access and wait for an explicit confirmation, like lockin 1.3. Mark commands that bootstrap TYPO3, because they may warm `var/cache`. Candidates:
    - one lookup per public package. With `mcp: available`, call `typo3_ter_lookup` with the extension key. An `empty` answer falls back to Packagist. Otherwise run `curl -s https://packagist.org/packages/<vendor>/<name>.json`.
    - `mkdir -p` and `cp -R "<scripts>/." "<work>/tools/"`
    - `typo3 list --format=json` with the DDEV prefix. Record the provider (core or typo3-console) per command.
-   - the Extension Scanner per own extension (`path` packages), with `ddev exec php .typo3-upgrade/tools/extension-scanner.php <key>` and the DDEV prefix. On 11 the capability probe may refuse. Then the backend scanner is the way.
+   - the Extension Scanner per own extension (`path` packages), with `ddev exec php .typo3-upgrade/tools/extension-scanner.php <key>` and the DDEV prefix. On 10 and 11 the capability probe may refuse. Then the backend scanner is the way.
    - with the MCP, also `typo3_project_describe`
 
    Run only confirmed commands. Declined commands leave their fields `unchecked`.

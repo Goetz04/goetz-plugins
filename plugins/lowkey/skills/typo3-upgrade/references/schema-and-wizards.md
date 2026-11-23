@@ -37,7 +37,7 @@ Run `extension:setup` explicitly after the schema gate (main session command). I
 
 ## Upgrade wizards
 
-Wizards belong to one rung. Since TYPO3 12, the core removes the wizards of older majors. So `upgrade:list` must be empty before the next rung starts.
+Wizards belong to one rung. Since TYPO3 12, the core removes the wizards of older majors. So `upgrade:list` must be empty before the next rung starts. On 10 and 11, the CLI availability of the wizard commands is unverified. Read `typo3 list`.
 
 Procedure:
 1. Run `upgrade:list` (check command). Read the ids from its output.

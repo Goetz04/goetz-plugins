@@ -7,7 +7,8 @@ This file defines how the skill builds `roadmap.md` and the step briefs. Placeho
 - Number the steps `01`, `02`, ... in dependency order. Write the slug in kebab case.
 - Include only the rungs between source and target.
 - Create one step per stage group (A, B, C+D, E) of each rung. Drop A or B when the inventory shows nothing to do, and record the reason.
-- Place each blocker migration on the version where the old and the new extension both run, or after the jump. Example: Gridelements to container runs on 11 before the jump. Mask to Content Blocks runs on 13. Record the decision and the reason in the roadmap, per blocker.
+- Place each blocker migration on the version where the old and the new extension both run, or after the jump. Example: Gridelements to container runs on 10 or 11 before the jump. Mask to Content Blocks runs on 13. Record the decision and the reason in the roadmap, per blocker.
+- Plan a blocker migration only when the extension has no release for one of the rungs of the roadmap, or its availability is `unchecked`. Only a lookup or an explicit core constraint per major proves a release (`SKILL.md` U2 step 3). Otherwise record it in the notes of the roadmap for a later upgrade. Its version updates stay in the B steps of the rungs.
 - Add a first step "set up DDEV" when `inventory.md` says `ddev: absent`.
 - Add an early step "move credentials out and untrack" for each tracked config file.
 - Add the forms step only when `typo3/cms-form` or a form extension is installed.
@@ -99,7 +100,7 @@ Then the brief follows this template. The text after each section name tells the
 ```
 # Step <nn>: <title>
 - Roadmap: .lockin/upgrade/roadmap.md (status and outcome live there)
-- Rung and stage group: <11->12 A | B | C+D | E | none>
+- Rung and stage group: <rung, for example 10->11> <A | B | C+D | E | none>
 - Depends on: <step numbers | none>
 - lockin mode: full | lite
 - MCP typo3-dev-companion: see roadmap.md
@@ -133,7 +134,7 @@ Instructions per section. Never copy `process.md` sections into a brief. Name th
 - `Expected diffs`. What the expect file must cover, plus the schema and TypoScript expectations. The content and its SHA-256 go into the lockin plan. The main session writes the file after approval.
 - `Never modify`. The expect file, the baselines, the tools and the tracked config files.
 - `Evidence`. The folder `.typo3-upgrade/evidence/<nn>-<slug>/` and the files to produce. No SQL dumps.
-- `References`. Repo-relative links to the frozen copies in `.lockin/upgrade/references/<file>.md`. Always include `.lockin/upgrade/references/process.md`. lockin's agents may read `.lockin/` with Read.
+- `References`. Repo-relative links to the frozen copies in `.lockin/upgrade/references/<file>.md`. Always include `.lockin/upgrade/references/process.md`. Also include the rung file of the step's rung, for example `.lockin/upgrade/references/v10-to-v11.md`. lockin's agents may read `.lockin/` with Read.
 
 ## Ticket text template
 

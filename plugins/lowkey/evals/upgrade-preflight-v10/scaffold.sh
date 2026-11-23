@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Creates a TYPO3 10.4 Composer project with a sitepackage and one public extension.
+# Creates a TYPO3 10.4 Composer project with a sitepackage, gridelements on a bridge version and a deprecation log.
 set -euo pipefail
-mkdir -p packages/sitepackage/Classes .ddev
+mkdir -p packages/sitepackage/Classes .ddev var/log
 cat > composer.json <<'JSON'
 {
   "name": "example/site",
   "type": "project",
   "require": {
-    "php": "^8.1",
+    "php": "^7.4",
     "typo3/cms-core": "^10.4",
     "example/sitepackage": "@dev"
   },
@@ -22,9 +22,11 @@ cat > composer.lock <<'JSON'
   "packages": [
     {"name": "typo3/cms-core", "version": "v10.4.37", "type": "typo3-cms-framework", "dist": {"type": "zip", "url": "https://api.github.com/repos/TYPO3-CMS/core/zipball/x"}, "notification-url": "https://packagist.org/downloads/", "extra": {"typo3/cms": {"extension-key": "core"}}},
     {"name": "example/sitepackage", "version": "dev-main", "type": "typo3-cms-extension", "dist": {"type": "path", "url": "packages/sitepackage", "reference": "x"}, "require": {"typo3/cms-core": "^10.4"}, "extra": {"typo3/cms": {"extension-key": "sitepackage"}}},
-    {"name": "georgringer/news", "version": "v9.4.0", "type": "typo3-cms-extension", "dist": {"type": "zip", "url": "https://api.github.com/repos/georgringer/news/zipball/x"}, "notification-url": "https://packagist.org/downloads/", "require": {"typo3/cms-core": "^10.4"}, "extra": {"typo3/cms": {"extension-key": "news"}}}
+    {"name": "georgringer/news", "version": "v9.4.0", "type": "typo3-cms-extension", "dist": {"type": "zip", "url": "https://api.github.com/repos/georgringer/news/zipball/x"}, "notification-url": "https://packagist.org/downloads/", "require": {"typo3/cms-core": "^10.4 || ^11.5"}, "extra": {"typo3/cms": {"extension-key": "news"}}},
+    {"name": "gridelementsteam/gridelements", "version": "v11.0.0", "type": "typo3-cms-extension", "dist": {"type": "zip", "url": "https://example.invalid/gridelements.zip"}, "notification-url": "https://packagist.org/downloads/", "require": {"typo3/cms-core": "^10.4 || ^11.5"}, "extra": {"typo3/cms": {"extension-key": "gridelements"}}}
   ],
-  "packages-dev": []
+  "packages-dev": [],
+  "plugin-api-version": "2.2.0"
 }
 JSON
 cat > packages/sitepackage/composer.json <<'JSON'
@@ -38,8 +40,12 @@ docroot: public
 php_version: "7.4"
 database:
   type: mariadb
-  version: "10.11"
+  version: "10.5"
 YAML
+cat > var/log/typo3_deprecations_0123456789.log <<'LOG'
+Mon, 01 Jan 2024 10:00:00 +0000 [NOTICE] request="x" component="TYPO3.CMS.deprecations": Core: Error handler (FE): TYPO3 Deprecation Notice: Example deprecation in /var/www/html/packages/sitepackage/Classes/Example.php line 12
+Mon, 01 Jan 2024 10:00:00 +0000 [NOTICE] request="x" component="TYPO3.CMS.deprecations": Core: Error handler (FE): TYPO3 Deprecation Notice: Example deprecation in /var/www/html/packages/sitepackage/Classes/Example.php line 12
+LOG
 git -c init.defaultBranch=main init -q
 git add .
 git -c user.name=eval -c user.email=eval@example.invalid commit -q -m "initial commit"

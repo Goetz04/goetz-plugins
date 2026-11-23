@@ -1,0 +1,55 @@
+schema_version: "1.1"
+name: upgrade-preflight-v10
+description: A TYPO3 10.4 project with target 11 gets an inventory and nothing outside its folders, with network and ddev declined.
+tags: [smoke]
+runs: 1
+context:
+  scaffold_script: scaffold.sh
+graders:
+  - name: inventory-written
+    type: file_exists
+    path: ".lockin/upgrade/inventory.md"
+    exists: true
+  - name: no-roadmap
+    type: file_exists
+    path: ".lockin/upgrade/roadmap.md"
+    exists: false
+  - name: no-guard-file
+    type: file_exists
+    path: ".lockin-guard.json"
+    exists: false
+  # Writes under .lockin/upgrade/ and .typo3-upgrade/ are allowed, writes anywhere else are not.
+  - name: no-edits-outside
+    type: tool_used
+    tool: Edit
+    input_match: '"file_path"\s*:\s*"(?![^"]*\.lockin/upgrade/)(?![^"]*\.typo3-upgrade/)'
+    min: 0
+    max: 0
+  - name: no-writes-outside
+    type: tool_used
+    tool: Write
+    input_match: '"file_path"\s*:\s*"(?![^"]*\.lockin/upgrade/)(?![^"]*\.typo3-upgrade/)'
+    min: 0
+    max: 0
+  # The prompt declines network lookups and ddev commands. Match them as commands, so reading .ddev/config.yaml stays allowed.
+  - name: no-network-or-ddev
+    type: tool_used
+    tool: Bash
+    input_match: '(?:^|[\s;&|("])(curl|wget|ddev)\s'
+    min: 0
+    max: 0
+  # Match the source header field, not the constraint column, which holds ^10.4 too.
+  - name: inventory-names-source
+    type: regex
+    target:
+      source: file
+      path: .lockin/upgrade/inventory.md
+    pattern: '[Ss]ource\W{1,6}(?:TYPO3\s+)?v?10\.4'
+    match: contains
+  - name: inventory-names-target
+    type: regex
+    target:
+      source: file
+      path: .lockin/upgrade/inventory.md
+    pattern: '[Tt]arget(?: proposal)?\W{1,6}(?:TYPO3\s+)?v?11\b'
+    match: contains

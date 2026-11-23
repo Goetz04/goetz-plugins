@@ -32,7 +32,7 @@ Every release bumps the version in `plugin.json`. See the [changelog](plugins/lo
 /lowkey:lockin [--keep] [--lite] <issue-number or task>
 /lowkey:lockin --resume [slug] [--keep]
 /lowkey:review [pr-number | branch | <base>..<head>]
-/lowkey:typo3-upgrade [--to 12|13|14] [--lite]
+/lowkey:typo3-upgrade [--to 11|12|13|14] [--lite]
 /lowkey:typo3-upgrade --resume | --step <n>
 ```
 
@@ -83,7 +83,7 @@ The skill runs test commands only after your confirmation and only if the review
 
 `/lowkey:typo3-upgrade` plans a Composer-based TYPO3 major upgrade. It orchestrates `lockin`: it writes the roadmap and hands each step to `lockin`, which implements and reviews it. The skill never changes project code, the database or Composer itself.
 
-The skill accepts 11.5, 12.4 and 13.4 as source and 12, 13 or 14 as target. It refuses other sources. It runs one rung at a time and never skips a major version. Local intermediate versions never go live.
+The skill accepts 10.4, 11.5, 12.4 and 13.4 as source and 11, 12, 13 or 14 as target. It refuses other sources. It runs one rung at a time and never skips a major version. Local intermediate versions never go live.
 
 | Phase | What happens |
 |---|---|
@@ -197,7 +197,7 @@ CI runs the unit tests on Python 3.9 and 3.12, plus the metadata check and both 
 
 ```text
 cd plugins/lowkey
-claude plugin eval . --tag smoke --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent "Bash(cp:*)" "Bash(mkdir:*)" --max-cost-usd 2
+claude plugin eval . --tag smoke --scaffold --trust-plugin --no-publish --allow-tools Bash Edit Write Agent "Bash(cp:*)" "Bash(mkdir:*)" --max-cost-usd 3
 ```
 
 The `typo3-upgrade` cases copy files with `cp` and `mkdir`, which the eval sandbox denies unless the two `Bash(...)` grants allow them. The `gate` tag holds the more expensive cases `gates-before-changes`, `plan-approval-gate` and `upgrade-roadmap-gate`. The first two start plugin agents, which the no-plugin baseline arm cannot run, so turn the baseline off:

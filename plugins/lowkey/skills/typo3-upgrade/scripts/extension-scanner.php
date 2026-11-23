@@ -13,7 +13,7 @@ declare(strict_types=1);
  *          and a last line "TOTAL strong=<n> weak=<n> errors=<n>".
  * Exit:    0 scanned completely without strong match, 1 at least one strong match,
  *          2 setup or runtime error or incomplete scan (errors > 0 in the TOTAL line).
- * Support: CLI tested on TYPO3 12 and 13. On TYPO3 11 the capability probe decides.
+ * Support: CLI tested on TYPO3 12 and 13. On TYPO3 10 and 11 the capability probe decides.
  */
 
 use PhpParser\Error as ParserError;

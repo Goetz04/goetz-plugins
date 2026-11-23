@@ -170,7 +170,7 @@ Every step brief carries these gates.
 - Composer scripts. Run Composer only with `--no-scripts` until the schema gate. The `post-autoload-dump` script runs `extension:setup`, which writes schema changes. After the gate, run `extension:setup` explicitly. It also writes missing default values of the extension configuration.
 - Release cooldown. `--no-blocking` is needed for TYPO3 advisories on Composer 2.9 and later. It also skips the release cooldown (unverified, check `composer update --help`). After such an update, read the `time` of every new or changed package in `composer.lock` and review very fresh releases.
 - Schema gate. Run `database:updateschema "*" --dry-run` and the `--raw` variant before every schema change. Never run `*.prefix` or `*.drop` globally. Run drops one by one, after `SELECT COUNT(*) ... WHERE field <> ''` on the live copy. Removal SQL from a local DB is only a template. Derive the go-live list from the dry run on a live copy.
-- Wizards. Wizards belong to one rung. Since 12, the core removes the wizards of older majors. `upgrade:list` must be empty before the next rung starts. Read the wizard ids from `upgrade:list` and never hardcode them.
+- Wizards. Wizards belong to one rung. Since 12, the core removes the wizards of older majors. `upgrade:list` must be empty before the next rung starts. Read the wizard ids from `upgrade:list` and never hardcode them. On 10 and 11, the CLI availability of the wizard commands is unverified. Read `typo3 list`.
 - Crawl diff. Compare every crawl with the previous baseline. Every diff outside the expected-diff list of the step is a regression.
 - Persistent evidence. Keep baselines and evidence in `<state>` or `<work>`, never in a session scratchpad. The session wipes it on restart.
 - Ignored config files. Change gitignored config files only with `configuration:set` and `configuration:remove`. `configuration:remove` without `--force` skips silently when no TTY exists. Check the result with `configuration:show`.
@@ -213,7 +213,7 @@ Install hint when the MCP is missing:
 - Run `bin/typo3-dev-companion install` in the project root, then restart the session.
 - `install` writes the `typo3-dev-companion` entry into `.mcp.json` and skills into `.agents/skills`. The option `--agent=<id>` selects other skill locations (unverified).
 - Commit these files on purpose, or add `.mcp.json` and `.agents/` to `info/exclude`.
-- The MCP covers 12.4, 13.4 and 14.3, not 11.5.
+- The MCP covers 12.4, 13.4 and 14.3, not 10.4 or 11.5.
 
 Without the MCP, use the TYPO3 changelog on docs.typo3.org and mark every fact `unverified`.
 
@@ -243,6 +243,9 @@ No entry has the status `verified`, because no entry has a named source.
 | `database:updateschema "*" --dry-run` and `--raw` | core or typo3-console, depends on the major | all | unverified | Provider per major unverified. Read `typo3 list`. |
 | `database:updateschema "*.add"` and `"*.change"` | core or typo3-console, depends on the major | all | unverified | Run `*.add` before and `*.change` after a data migration. |
 | `extension:setup` | unverified | 12 to 14 | practice | Run explicitly after the schema gate. |
+| `upgrade:list` | unverified | 10 and 11 | unverified | Provider and availability unverified. Read `typo3 list`. |
+| `upgrade:run <id>` | unverified | 10 and 11 | unverified | Provider and availability unverified. Read `typo3 list`. |
+| `extension:setup` | unverified | 10 and 11 | unverified | Provider and availability unverified. Read `typo3 list`. |
 | `configuration:set`, `remove`, `show` | unverified per major | all | unverified | `remove` without `--force` skips silently without TTY. |
 | `referenceindex:update` and `--check` | unverified | all | practice | `--check` ends every rung. |
 | `backend:lock` and `backend:unlock` | unverified | all | practice | Used around go-live migrations. |
