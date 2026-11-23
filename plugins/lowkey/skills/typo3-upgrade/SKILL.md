@@ -66,7 +66,7 @@ Write nothing and ask nothing before the refusal check. One exception applies. A
 1. Run `git rev-parse --show-toplevel`. If it fails, say that the skill needs a git repository and stop.
 2. Determine `<composer-root>` as in `## Paths`.
 3. Read `typo3/cms-core` from `<composer-root>/composer.lock`. Search `packages` and `packages-dev`. Strip a leading `v` from the version. Compare only major and minor, so a suffix after them does not change the result. A dev version with a numeric major and minor, for example `10.4.x-dev`, passes. The inventory then marks its patch level `unchecked`.
-4. Refuse and stop with a short note, and write no file, in these cases.
+4. Refuse and stop with a short note, and write no file, in these cases. The note names the installed version and the supported sources. Do not read further files and do not analyze the project.
    - `composer.lock` or `typo3/cms-core` is missing. The skill needs Composer mode.
    - Major and minor of the version are not numeric, for example `dev-main` or `dev-10.4`.
    - The version is below 10.4. For 10.0 to 10.3, say to update to 10.4 first.
