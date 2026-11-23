@@ -17,13 +17,14 @@ All notable changes to the lowkey plugin are documented in this file. The format
 - Step briefs reference the rung file of their rung in `References`.
 - The eval `upgrade-refuses-v10` is now `upgrade-refuses-v9` with a 9.5 scaffold.
 - The README raises the smoke budget to `--max-cost-usd 3`, because the smoke tag holds one more preflight case.
+- The refusal in U0 names only the installed version and the supported sources and does not analyze the project.
 
 ### Notes
 
 - Every item of `v10-to-v11.md` is `unverified`. The facts come from the TYPO3 changelog, get.typo3.org and Packagist, not from a real 10 to 11 run. Changelog numbers seen only in a search excerpt carry `(unverified)`.
 - The MCP TYPO3/dev-companion does not cover 10.4 or 11.5. The rung file sends every fact check to docs.typo3.org.
 - `ts-dump.php` does not run on 10 and 11. Crawl diffs are the only TypoScript proof there. Whether the Extension Scanner CLI probe passes on 10.4 is unverified.
-- The new and the renamed eval did not run yet.
+- `upgrade-refuses-v9`, `upgrade-preflight-v10` and `upgrade-preflight-readonly` pass in a local run. `upgrade-refuses-v9` failed its behavior grader before the U0 refusal fix.
 
 ## [1.5.0] - 2026-11-13
 
