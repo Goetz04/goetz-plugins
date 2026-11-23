@@ -12,7 +12,7 @@ declare(strict_types=1);
  * Output:  Sorted lines with the prefixes TSCONFIG:, SETUP:, CONSTANTS: and SETUPSUB:.
  *          Newlines in values appear as \n. All condition branches stay in, no verdicts are evaluated.
  * Exit:    0 dump written, 2 setup or runtime error.
- * Support: Used on TYPO3 12 and 13, unverified on 14. TYPO3 11 lacks the include tree API.
+ * Support: Used on TYPO3 12 and 13, unverified on 14. TYPO3 10 and 11 lack the include tree API.
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
@@ -80,7 +80,7 @@ foreach ([
     LosslessTokenizer::class,
 ] as $requiredClass) {
     if (!class_exists($requiredClass)) {
-        fail('needs the TypoScript include tree API of TYPO3 12 or newer. On TYPO3 11 use crawl diffs as TypoScript proof.');
+        fail('needs the TypoScript include tree API of TYPO3 12 or newer. On TYPO3 10 and 11 use crawl diffs as TypoScript proof.');
     }
 }
 

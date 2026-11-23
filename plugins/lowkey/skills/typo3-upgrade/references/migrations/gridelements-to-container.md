@@ -6,7 +6,7 @@ Status of the container commands (`container:sorting`, `container:integrity`) is
 
 ## When to run it
 
-Run the migration on the source version where both extensions work. In the common case that is TYPO3 11, in the stage group that `roadmap.md` names for the blocker step. It runs before the jump of its rung, because Gridelements has no release for the target.
+Run the migration on the source version where both extensions work. In the common case that is TYPO3 10 or 11, in the stage group that `roadmap.md` names for the blocker step. It runs before the jump of its rung, because Gridelements has no release for the target.
 
 Run it again on every live copy and at go-live (see the go-live order below).
 

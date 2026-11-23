@@ -47,7 +47,7 @@ Every diff outside the expected-diff list of the step is a regression (`process.
 
 Run `php .typo3-upgrade/tools/ts-dump.php [page-uid]` before and after the change, for example into two files in the evidence folder. The script sorts its output. The dumps hold values such as API keys, so never print a plain diff of them. Compare the key sets with `diff <(cut -d= -f1 before.txt) <(cut -d= -f1 after.txt)` and report changed values only as key paths or counts (`process.md` `## Secrets`). It defaults to page uid 1 and needs TYPO3 12 or newer. It documents 12 and 13. On 14 the result is unverified. It exits 2 on a missing autoloader or missing classes.
 
-On TYPO3 11 the script does not work. There, crawl diffs are the only TypoScript proof.
+On TYPO3 10 and 11 the script does not work. There, crawl diffs are the only TypoScript proof.
 
 The script runs as a check command when it only reads and writes to a fixed scratch file outside the baselines.
 
@@ -57,6 +57,7 @@ Run `php .typo3-upgrade/tools/extension-scanner.php <extension-key>` once per ow
 - Output lines read `<indicator> <relative path>:<line> <message>`, then `ERROR ...` lines for unparsable files, then `TOTAL strong=<n> weak=<n> errors=<n>`.
 - Exit 0 means the scan covered every file and found no strong match. 1 means at least one strong match. 2 means an error, including a file that could not be parsed.
 - The scanner knows only the matchers of the installed core. Run it again after each jump.
+- On 10 and 11 the capability probe of the script decides. If it refuses, use Admin Tools > Upgrade > Scan Extension Files.
 - Both the scanner and `ts-dump.php` bootstrap TYPO3 and may warm `var/cache`.
 
 ## Fixtures inside a snapshot

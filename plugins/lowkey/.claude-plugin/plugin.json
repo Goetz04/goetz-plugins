@@ -1,6 +1,6 @@
 {
   "name": "lowkey",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Lock in on big, important tasks: understand, plan, challenge, get approval, implement in isolated work packages and review with dedicated subagents. Also reviews branches and pull requests on demand and plans TYPO3 major upgrades step by step.",
   "author": {
     "name": "Goetz",

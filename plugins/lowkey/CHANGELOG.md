@@ -2,6 +2,29 @@
 
 All notable changes to the lowkey plugin are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the plugin uses [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-11-23
+
+### Added
+
+- `/lowkey:typo3-upgrade` accepts TYPO3 10.4 as source and 11 as target (`--to 11`). 9.5 and older stay refused. For 10.0 to 10.3 the refusal says to update to 10.4 first. Versions without a numeric major and minor are refused, dev versions like `10.4.x-dev` pass with an `unchecked` patch level.
+- Reference `v10-to-v11.md` for the new rung 10 to 11, with items for the 10.4 patch level, the PHP 7.4 bridge, DB and Composer minimums, the `TYPO3_MODE` guard, Extbase plugin registration, Fluid widgets, signal slots, removed functionality of 11.0, bridge versions of extensions, `typo3/cms-about`, typo3-console, PackageStates in Composer mode, wizards and the TypoScript proof.
+- Command matrix rows for `upgrade:list`, `upgrade:run` and `extension:setup` on 10 and 11, all `unverified`.
+- Smoke eval `upgrade-preflight-v10` for a 10.4 project with `--to 11`.
+
+### Changed
+
+- Blockers are judged per rung for the installed version. An extension with a release for every rung of the run goes into the note column, and the roadmap plans no blocker migration for it. Only a lookup or a core constraint that names each major explicitly proves a release. `unchecked` extensions stay blocker candidates.
+- Step briefs reference the rung file of their rung in `References`.
+- The eval `upgrade-refuses-v10` is now `upgrade-refuses-v9` with a 9.5 scaffold.
+- The README raises the smoke budget to `--max-cost-usd 3`, because the smoke tag holds one more preflight case.
+
+### Notes
+
+- Every item of `v10-to-v11.md` is `unverified`. The facts come from the TYPO3 changelog, get.typo3.org and Packagist, not from a real 10 to 11 run. Changelog numbers seen only in a search excerpt carry `(unverified)`.
+- The MCP TYPO3/dev-companion does not cover 10.4 or 11.5. The rung file sends every fact check to docs.typo3.org.
+- `ts-dump.php` does not run on 10 and 11. Crawl diffs are the only TypoScript proof there. Whether the Extension Scanner CLI probe passes on 10.4 is unverified.
+- The new and the renamed eval did not run yet.
+
 ## [1.5.0] - 2026-11-13
 
 ### Added
